@@ -60,7 +60,7 @@ namespace BlockParty.Blocks.Beam
                         initialized = true;
                     }
 
-                    accumulator = new TAccumulator(); // dictionary of <window, accumulator> if order not guaranteed
+                    accumulator = new TAccumulator();
                     currentWindow = itemTime / nanosecondWindow;
                     accumulator.WindowStart = (itemTime / nanosecondWindow) * (nanosecondWindow);
                     accumulator.WindowEnd = accumulator.WindowStart + nanosecondWindow;
@@ -72,8 +72,6 @@ namespace BlockParty.Blocks.Beam
             target.Completion.ContinueWith(delegate
             {
                 // let the caller decide if it should keep the very last window
-                // maybe need to have a a field on the window of "naturally emitted" or something?
-                // or expose the last accumulator as a GETter and just get the last one at the end outside of dataflow.
                 if (initialized)
                 {
                     var posted = source.Post(accumulator);
