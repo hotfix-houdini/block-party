@@ -1,4 +1,5 @@
-﻿using System;
+﻿using BlockParty.Exceptions;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
@@ -34,7 +35,7 @@ namespace BlockParty.Blocks.Beam
                         var posted = source.Post(accumulator);
                         if (!posted)
                         {
-                            throw new Exception("Failed to post out of beamblock");
+                            throw new FailedToPostException();
                         }
 
                         var newWindow = itemTime / nanosecondWindow;
@@ -50,7 +51,7 @@ namespace BlockParty.Blocks.Beam
                             posted = source.Post(emptyWindow);
                             if (!posted)
                             {
-                                throw new Exception("Failed to post out of beamblock");
+                                throw new FailedToPostException();
                             }
                         }
                     }
@@ -78,7 +79,7 @@ namespace BlockParty.Blocks.Beam
                     var posted = source.Post(accumulator);
                     if (!posted)
                     {
-                        throw new Exception("Failed to post out of beamblock");
+                        throw new FailedToPostException();
                     }
                 }
                 source.Complete();
