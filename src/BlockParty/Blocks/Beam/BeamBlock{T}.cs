@@ -21,6 +21,8 @@ namespace BlockParty.Blocks.Beam
         : IPropagatorBlock<TStreamedModel, TAccumulator>, IReceivableSourceBlock<TAccumulator>
         where TAccumulator : class, IAccumulator, new()
     {
+        private static readonly NanosecondTimeConverter _timeConverter = new NanosecondTimeConverter();
+
         private readonly ITargetBlock<TStreamedModel> m_target;
         private readonly IReceivableSourceBlock<TAccumulator> m_source;
 
@@ -38,7 +40,7 @@ namespace BlockParty.Blocks.Beam
         public BeamBlock(
             TimeSpan window,
             Action<TStreamedModel, TAccumulator> accumulateMethod,
-            Func<TStreamedModel, long> timeSelectionMethod)
+            Func<TStreamedModel, NanosecondTimeConverter, long> timeSelectionMethod)
         {
             var nanosecondWindow = window.Ticks * 100;
 
@@ -49,7 +51,7 @@ namespace BlockParty.Blocks.Beam
             var source = new BufferBlock<TAccumulator>();
             var target = new ActionBlock<TStreamedModel>(item =>
             {
-                var itemTime = timeSelectionMethod(item);
+                var itemTime = timeSelectionMethod(item, _timeConverter);
                 if (itemTime / nanosecondWindow > currentWindow)
                 {
                     if (initialized)
