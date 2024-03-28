@@ -21,6 +21,8 @@ namespace BlockParty.Blocks.Beam
         : IPropagatorBlock<TStreamedModel, TAccumulator>, IReceivableSourceBlock<TAccumulator>
         where TAccumulator : class, IAccumulator, new()
     {
+        private static readonly NanosecondTimeConverter _timeConverter = new NanosecondTimeConverter();
+
         private readonly ITargetBlock<TStreamedModel> m_target;
         private readonly IReceivableSourceBlock<TAccumulator> m_source;
 
@@ -33,12 +35,15 @@ namespace BlockParty.Blocks.Beam
         ///     - emit the accumulated window once the window has passed.<br/><br/>
         /// 
         /// This block can support aggregating past streams, in addition to real-time streams.<br/><br/>
+        ///  
+        /// <param name="timeSelectionMethod">The Time Selection lambda includes an optional converter to a long with the unix timestamp in nanoseconds, which is the time datatype used in this block.</param><br/><br/>
+        /// 
         /// See <a href="https://github.com/hotfix-houdini/block-party">GitHub</a> for more details.
         /// </summary>
         public BeamBlock(
             TimeSpan window,
             Action<TStreamedModel, TAccumulator> accumulateMethod,
-            Func<TStreamedModel, long> timeSelectionMethod)
+            Func<TStreamedModel, NanosecondTimeConverter, long> timeSelectionMethod)
         {
             var nanosecondWindow = window.Ticks * 100;
 
@@ -49,7 +54,7 @@ namespace BlockParty.Blocks.Beam
             var source = new BufferBlock<TAccumulator>();
             var target = new ActionBlock<TStreamedModel>(item =>
             {
-                var itemTime = timeSelectionMethod(item);
+                var itemTime = timeSelectionMethod(item, _timeConverter);
                 if (itemTime / nanosecondWindow > currentWindow)
                 {
                     if (initialized)

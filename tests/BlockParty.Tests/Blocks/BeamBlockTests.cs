@@ -15,7 +15,7 @@ public class BeamBlockTests
             {
                 accumulator.Value += streamed.Value;
             },
-            (streamed) => streamed.Time);
+            (streamed, _) => streamed.Time);
         var accumulators = new List<TestAccumulator>();
         var gatherBlock = new ActionBlock<TestAccumulator>(i => accumulators.Add(i));
 
@@ -54,7 +54,7 @@ public class BeamBlockTests
             {
                 accumulator.Value += streamed.Value;
             },
-            (streamed) => streamed.Time);
+            (streamed, _) => streamed.Time);
         var accumulators = new List<TestAccumulator>();
         var gatherBlock = new ActionBlock<TestAccumulator>(i => accumulators.Add(i));
 
@@ -100,7 +100,7 @@ public class BeamBlockTests
             {
                 accumulator.Value += streamed.Value;
             },
-            (streamed) => streamed.Time);
+            (streamed, _) => streamed.Time);
         var accumulators = new List<TestAccumulator>();
         var gatherBlock = new ActionBlock<TestAccumulator>(i => accumulators.Add(i));
 
@@ -127,7 +127,7 @@ public class BeamBlockTests
             {
                 accumulator.Value += streamed.Value;
             },
-            (streamed) => streamed.Time);
+            (streamed, _) => streamed.Time);
         var accumulators = new List<TestAccumulator>();
         var gatherBlock = new ActionBlock<TestAccumulator>(i => accumulators.Add(i));
 
@@ -179,7 +179,7 @@ public class BeamBlockTests
             {
                 accumulator.Value += streamed.Value;
             },
-            (streamed) => streamed.Time);
+            (streamed, _) => streamed.Time);
         var accumulators = new List<TestAccumulator>();
         var gatherBlock = new ActionBlock<TestAccumulator>(i => accumulators.Add(i));
 
@@ -224,11 +224,57 @@ public class BeamBlockTests
             Assert.That(accumulators[5].WindowEnd, Is.EqualTo(21600_000000000));
         });
     }
+
+    [Test]
+    public void ShouldProvideAnOptionalTimeConverter()
+    {
+        // arrange
+        var beamBlock = new BeamBlock<TestModelWithDateTimeOffsetTime, TestAccumulator>(
+            TimeSpan.FromHours(1),
+            (streamed, accumulator) =>
+            {
+                accumulator.Value += streamed.Value;
+            },
+            (streamed, timeConverter) => timeConverter.ConvertToNanosecondEpoch(streamed.Time));
+        var accumulators = new List<TestAccumulator>();
+        var gatherBlock = new ActionBlock<TestAccumulator>(i => accumulators.Add(i));
+
+        beamBlock.LinkTo(gatherBlock, new DataflowLinkOptions()
+        {
+            PropagateCompletion = true
+        });
+
+        var streamed1 = new TestModelWithDateTimeOffsetTime() { Time = DateTimeOffset.Parse("2024-03-28T07:00:01-05:00"), Value = 1 };
+        var streamed2 = new TestModelWithDateTimeOffsetTime() { Time = DateTimeOffset.Parse("2024-03-28T07:00:02-05:00"), Value = 2 };
+        var streamed3 = new TestModelWithDateTimeOffsetTime() { Time = DateTimeOffset.Parse("2024-03-28T08:00:00-05:00"), Value = 2 };
+
+        // act
+        beamBlock.Post(streamed1);
+        beamBlock.Post(streamed2);
+        beamBlock.Post(streamed3);
+        beamBlock.Complete();
+        gatherBlock.Completion.Wait();
+
+        // assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(accumulators, Has.Count.EqualTo(2));
+            Assert.That(accumulators.First().Value, Is.EqualTo(3));
+            Assert.That(accumulators.Last().Value, Is.EqualTo(2));
+        });
+    }
+
 }
 
 public class TestModel
 {
     public long Time { get; set; }
+    public int Value { get; set; }
+}
+
+public class TestModelWithDateTimeOffsetTime
+{
+    public DateTimeOffset Time { get; set; }
     public int Value { get; set; }
 }
 
