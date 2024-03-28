@@ -8,6 +8,14 @@ using System.Threading.Tasks.Dataflow;
 
 namespace BlockParty.Blocks.Throttle
 {
+    /// <summary>
+    /// ThrottleBlock allows you to insert wall-clock delays into a TPL DataFlow pipeline.<br/>
+    /// Upstream blocks can be unthrottled. Downstream blocks will receieve a message once per internval.<br/><br/>
+    /// 
+    /// <param name="throttle">The throttle timespan must be >= 100 milliseconds due to .NET's time precision.</param><br/><br/>
+    /// 
+    /// See <a href="https://github.com/hotfix-houdini/block-party">GitHub</a> for more details.
+    /// </summary>
     public class ThrottleBlock<T> : IPropagatorBlock<T, T>, IReceivableSourceBlock<T>
     {
         private readonly ITargetBlock<T> m_target;
@@ -17,6 +25,14 @@ namespace BlockParty.Blocks.Throttle
         private readonly SemaphoreSlim _semaphore = new SemaphoreSlim(1, 1);
         private bool _completitionRequested = false;
 
+        /// <summary>
+        /// ThrottleBlock allows you to insert wall-clock delays into a TPL DataFlow pipeline.<br/>
+        /// Upstream blocks can be unthrottled. Downstream blocks will receieve a message once per internval.<br/><br/>
+        /// 
+        /// <param name="throttle">The throttle timespan must be >= 100 milliseconds due to .NET's time precision.</param><br/><br/>
+        /// 
+        /// See <a href="https://github.com/hotfix-houdini/block-party">GitHub</a> for more details.
+        /// </summary>
         public ThrottleBlock(TimeSpan throttle)
         {
             if (throttle < TimeSpan.FromMilliseconds(100))
