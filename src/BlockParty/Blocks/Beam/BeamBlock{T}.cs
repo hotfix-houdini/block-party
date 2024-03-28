@@ -6,6 +6,17 @@ using System.Threading.Tasks.Dataflow;
 
 namespace BlockParty.Blocks.Beam
 {
+    /// <summary>
+    /// BeamBlock is inspired by the Apache Beam stream processing framework. It allows you to aggregate a stream of T into windowed accumulators.<br/><br/>
+    /// 
+    /// For example, if you want to create candlesticks from a stream of stock prices, this block will enable you to:<br/>
+    ///     - group by a specific TimeSpan window size (you can select the Time property from your model)<br/>
+    ///     - accumulate all the records in the window using your own logic (such as calculating max, min, volume)<br/>
+    ///     - emit the accumulated window once the window has passed.<br/><br/>
+    /// 
+    /// This block can support aggregating past streams, in addition to real-time streams.<br/><br/>
+    /// See <a href="https://github.com/hotfix-houdini/block-party">GitHub</a> for more details.
+    /// </summary>
     public class BeamBlock<TStreamedModel, TAccumulator>
         : IPropagatorBlock<TStreamedModel, TAccumulator>, IReceivableSourceBlock<TAccumulator>
         where TAccumulator : class, IAccumulator, new()
@@ -13,6 +24,17 @@ namespace BlockParty.Blocks.Beam
         private readonly ITargetBlock<TStreamedModel> m_target;
         private readonly IReceivableSourceBlock<TAccumulator> m_source;
 
+        /// <summary>
+        /// BeamBlock is inspired by the Apache Beam stream processing framework. It allows you to aggregate a stream of T into windowed accumulators.<br/><br/>
+        /// 
+        /// For example, if you want to create candlesticks from a stream of stock prices, this block will enable you to:<br/>
+        ///     - group by a specific TimeSpan window size (you can select the Time property from your model)<br/>
+        ///     - accumulate all the records in the window using your own logic (such as calculating max, min, volume)<br/>
+        ///     - emit the accumulated window once the window has passed.<br/><br/>
+        /// 
+        /// This block can support aggregating past streams, in addition to real-time streams.<br/><br/>
+        /// See <a href="https://github.com/hotfix-houdini/block-party">GitHub</a> for more details.
+        /// </summary>
         public BeamBlock(
             TimeSpan window,
             Action<TStreamedModel, TAccumulator> accumulateMethod,
