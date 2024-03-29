@@ -1,0 +1,29 @@
+name: cd-nuget
+
+on:
+  workflow_dispatch:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: '8.0'
+
+    - name: Build with dotnet
+      run: dotnet build --configuration Release
+
+    - name: Pack with dotnet
+      run: dotnet pack --configuration Release --output nupkgs
+
+    - name: Publish to NuGet
+      run: dotnet nuget push **/*.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{secrets.NUGET_API_KEY}}
+      env:
+        NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
