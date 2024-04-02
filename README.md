@@ -3,7 +3,7 @@ Extensions of the .NET TPL Dataflow Library
 
 # Blocks
 ### BeamBlock
-Inspired by Apache Beam, BeamBlock lets you group an incoming stream into time windows, and then aggregate each item wihtin a window into an arbitrary accumulator. Downstream blocks will receive these windowed accumulators.
+Inspired by Apache Beam, BeamBlock lets you group an incoming stream into time windows, and then aggregate each item within a window into an arbitrary accumulator. Downstream blocks will receive these windowed accumulators.
 
 Conceptual Example:
 ```txt
