@@ -2,6 +2,11 @@ name: cd-nuget
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'NuGet Package Version'
+        required: true
+        default: '1.0.0'
     branches:
       - main
 
@@ -21,9 +26,9 @@ jobs:
       run: dotnet build --configuration Release
 
     - name: Pack with dotnet
-      run: dotnet pack --configuration Release --output nupkgs
+      run: dotnet pack --configuration Release --output nupkgs /p:PackageVersion=${{ github.event.inputs.version }}
 
     - name: Publish to NuGet
-      run: dotnet nuget push **/*.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{secrets.NUGET_API_KEY}}
+      run: dotnet nuget push **/*.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }}
       env:
         NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
