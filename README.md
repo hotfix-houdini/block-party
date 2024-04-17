@@ -140,3 +140,32 @@ public void ShouldWaitForThrottleToElapseFor2ndEmit()
     Assert.That((receivedMessages.Last().receivedTime - receivedMessages.First().receivedTime).Ticks, Is.GreaterThanOrEqualTo(period.Ticks).Within(TimeSpan.FromMilliseconds(100).Ticks));
 }
 ```
+
+# Settings
+### BeamBlock
+- OmitIncompleteFinalWindow = `true` or `false`. Example:
+  ```txt
+    Input Stream: 
+    [
+	    (time: 1pm, value: 1),
+	    (time: 2pm, value: 2),
+	    (time: 3pm, value: 3)
+    ]
+    Accumulator: window(int numItems, int valueOfItems)
+
+    Beam Block on Input Stream:
+	    - window size: 2 hours
+	    - summary method: (item, window) => { window.numItems++; window.valueOfItems += item.value; }
+
+    Output Stream with OmitIncompleteFinalWindow = false (default):
+    [
+	    (numItems: 2, valueOfItems: 3), // time 1pm and time 2pm
+	    (numItems: 1, valueOfItems: 3) // time 3pm
+    ] 
+
+    Output Stream with OmitIncompleteFinalWindow = true:
+    [
+	    (numItems: 2, valueOfItems: 3), // time 1pm and time 2pm; emitted on item3
+        // item 3 not emitted; didn't receive an item >= 4pm.
+    ]
+  ```
