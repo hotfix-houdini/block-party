@@ -9,7 +9,12 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{790E6A84-046
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{D0918144-F26B-480E-A24E-F76E1805403F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BlockParty.Tests", "tests\BlockParty.Tests\BlockParty.Tests.csproj", "{C1B495C4-242F-4130-B697-232507AC5547}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BlockParty.Tests", "tests\BlockParty.Tests\BlockParty.Tests.csproj", "{C1B495C4-242F-4130-B697-232507AC5547}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "sln", "sln", "{70532E65-D3E1-4E7E-B5F4-4E4B9A776079}"
+	ProjectSection(SolutionItems) = preProject
+		README.md = README.md
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

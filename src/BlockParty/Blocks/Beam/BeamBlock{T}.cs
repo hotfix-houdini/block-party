@@ -25,6 +25,7 @@ namespace BlockParty.Blocks.Beam
 
         private readonly ITargetBlock<TStreamedModel> m_target;
         private readonly IReceivableSourceBlock<TAccumulator> m_source;
+        private readonly BeamBlockSettings _settings;
 
         /// <summary>
         /// BeamBlock is inspired by the Apache Beam stream processing framework. It allows you to aggregate a stream of T into windowed accumulators.<br/><br/>
@@ -43,8 +44,10 @@ namespace BlockParty.Blocks.Beam
         public BeamBlock(
             TimeSpan window,
             Action<TStreamedModel, TAccumulator> accumulateMethod,
-            Func<TStreamedModel, NanosecondTimeConverter, long> timeSelectionMethod)
+            Func<TStreamedModel, NanosecondTimeConverter, long> timeSelectionMethod,
+            BeamBlockSettings settings = null)
         {
+            _settings = settings ?? new BeamBlockSettings();
             var nanosecondWindow = window.Ticks * 100;
 
             var accumulator = new TAccumulator();
@@ -98,8 +101,7 @@ namespace BlockParty.Blocks.Beam
 
             target.Completion.ContinueWith(delegate
             {
-                // let the caller decide if it should keep the very last window
-                if (initialized)
+                if (initialized && !_settings.OmitIncompleteFinalWindow)
                 {
                     var posted = source.Post(accumulator);
                     if (!posted)

@@ -264,6 +264,56 @@ public class BeamBlockTests
         });
     }
 
+    [Theory]
+    [TestCase(null, 1)]
+    [TestCase(false, 1)]
+    [TestCase(true, 0)]
+    public void ShouldLeverageOmitIncompleteFinalWindowProperty(bool? omitIncompleteFinalWindow, int expectedWindows)
+    {
+        // arrange
+        var beamBlockSettings = omitIncompleteFinalWindow == null
+            ? null
+            : new BeamBlockSettings()
+            {
+                OmitIncompleteFinalWindow = omitIncompleteFinalWindow.Value
+            };
+        var beamBlock = omitIncompleteFinalWindow == null
+            ? new BeamBlock<TestModelWithDateTimeOffsetTime, TestAccumulator>(
+                TimeSpan.FromHours(1),
+                (streamed, accumulator) =>
+                {
+                    accumulator.Value += streamed.Value;
+                },
+                (streamed, timeConverter) => timeConverter.ConvertToNanosecondEpoch(streamed.Time))
+            : new BeamBlock<TestModelWithDateTimeOffsetTime, TestAccumulator>(
+                TimeSpan.FromHours(1),
+                (streamed, accumulator) =>
+                {
+                    accumulator.Value += streamed.Value;
+                },
+                (streamed, timeConverter) => timeConverter.ConvertToNanosecondEpoch(streamed.Time),
+                beamBlockSettings);
+
+        var accumulators = new List<TestAccumulator>();
+        var gatherBlock = new ActionBlock<TestAccumulator>(i => accumulators.Add(i));
+
+        beamBlock.LinkTo(gatherBlock, new DataflowLinkOptions()
+        {
+            PropagateCompletion = true
+        });
+
+        var streamed1 = new TestModelWithDateTimeOffsetTime() { Time = DateTimeOffset.Parse("2024-03-28T07:00:01-05:00"), Value = 1 };
+        var streamed2 = new TestModelWithDateTimeOffsetTime() { Time = DateTimeOffset.Parse("2024-03-28T07:00:02-05:00"), Value = 2 };
+
+        // act
+        beamBlock.Post(streamed1);
+        beamBlock.Post(streamed2);
+        beamBlock.Complete();
+        gatherBlock.Completion.Wait();
+
+        // assert
+        Assert.That(accumulators, Has.Count.EqualTo(expectedWindows));
+    }
 }
 
 public class TestModel
