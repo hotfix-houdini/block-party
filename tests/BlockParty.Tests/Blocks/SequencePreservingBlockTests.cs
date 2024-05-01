@@ -5,15 +5,30 @@ namespace BlockParty.Tests.Blocks;
 public class SequencePreservingBlockTests
 {
     [Theory]
-    [TestCase("1, 2, 3", null, "1, 2, 3")]
-    [TestCase("3, 2, 1", null, "3")]
-    [TestCase("2, 4, 3", null, "2, 3, 4")]
-    [TestCase("1, 2, 3", 2, "2, 3")]
-    [TestCase("1, 2, 3", 3, "3")]
-    [TestCase("3, 2, 1", 1, "1, 2, 3")]
-    [TestCase("3, 2, 1", 2, "2, 3")]
-    [TestCase("2, 4, 3", 1, "")]
-    public async Task ShouldReorderStreamToBeInOrder(string inputStreamCsv, long? fromFirstElement, string expectedOutputStreamCsv)
+    [TestCase("1, 2, 3", null, OnCompleteBufferedMessageBehavior.Discard, "1, 2, 3")]
+    [TestCase("3, 2, 1", null, OnCompleteBufferedMessageBehavior.Discard, "3")]
+    [TestCase("2, 4, 3", null, OnCompleteBufferedMessageBehavior.Discard, "2, 3, 4")]
+    [TestCase("1, 2, 3", 2, OnCompleteBufferedMessageBehavior.Discard, "2, 3")]
+    [TestCase("1, 2, 3", 3, OnCompleteBufferedMessageBehavior.Discard, "3")]
+    [TestCase("3, 2, 1", 1, OnCompleteBufferedMessageBehavior.Discard, "1, 2, 3")]
+    [TestCase("3, 2, 1", 2, OnCompleteBufferedMessageBehavior.Discard, "2, 3")]
+    [TestCase("2, 4, 3", 1, OnCompleteBufferedMessageBehavior.Discard, "")]
+
+    [TestCase("1, 2, 3", null, OnCompleteBufferedMessageBehavior.Emit, "1, 2, 3")]
+    [TestCase("3, 2, 1", null, OnCompleteBufferedMessageBehavior.Emit, "3")]
+    [TestCase("2, 4, 3", null, OnCompleteBufferedMessageBehavior.Emit, "2, 3, 4")]
+    [TestCase("1, 2, 3", 2, OnCompleteBufferedMessageBehavior.Emit, "2, 3")]
+    [TestCase("1, 2, 3", 3, OnCompleteBufferedMessageBehavior.Emit, "3")]
+    [TestCase("3, 2, 1", 1, OnCompleteBufferedMessageBehavior.Emit, "1, 2, 3")]
+    [TestCase("3, 2, 1", 2, OnCompleteBufferedMessageBehavior.Emit, "2, 3")]
+
+    [TestCase("2, 4, 3", 1, OnCompleteBufferedMessageBehavior.Emit, "2, 3, 4")]
+    [TestCase("2, 4, 6, 5, 7", 1, OnCompleteBufferedMessageBehavior.Emit, "2, 4, 5, 6, 7")]
+    public async Task ShouldReorderStreamToBeInOrder(
+        string inputStreamCsv,
+        long? fromFirstElement,
+        OnCompleteBufferedMessageBehavior onCompleteBehavior,
+        string expectedOutputStreamCsv)
     {
         // arrange
         var expectedOutput = expectedOutputStreamCsv.Split(", ").Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
@@ -24,6 +39,7 @@ public class SequencePreservingBlockTests
         var settings = new SequencePreservingBlockSettings()
         {
             SequenceInitialization = sequenceInitialization,
+            OnCompleteBufferedMessageBehavior = onCompleteBehavior,
         };
 
         var inputBlock = new TransformManyBlock<string, string>(inputString => inputString.Split(", "));
@@ -42,7 +58,4 @@ public class SequencePreservingBlockTests
         // assert
         CollectionAssert.AreEqual(expectedOutput, actualItems);
     }
-
-    // should emit out-of-order on completition or nah option 
-    // failed to post exception
 }

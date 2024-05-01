@@ -1,4 +1,5 @@
-﻿using System;
+﻿using BlockParty.Exceptions;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -51,7 +52,11 @@ namespace BlockParty.Blocks.SequencePreserving
                     return false;
                 }))
                 {
-                    source.Post(pendingMessage);
+                    var posted = source.Post(pendingMessage);
+                    if (!posted)
+                    {
+                        throw new FailedToPostException();
+                    }
                 }
 
                 _pendingMessages.RemoveWhere(msg => _sequenceIndexExtractor(msg) <= _sequenceNumber);
@@ -59,6 +64,20 @@ namespace BlockParty.Blocks.SequencePreserving
 
             target.Completion.ContinueWith(delegate
             {
+                if (_settings.OnCompleteBufferedMessageBehavior == OnCompleteBufferedMessageBehavior.Emit)
+                {
+                    foreach (var message in _pendingMessages)
+                    {
+                        var posted = source.Post(message);
+                        if (!posted)
+                        {
+                            throw new FailedToPostException();
+                        }
+                    }
+
+                    _pendingMessages.RemoveWhere(x => true);
+                }
+
                 source.Complete();
             });
 
