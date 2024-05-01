@@ -58,4 +58,30 @@ public class SequencePreservingBlockTests
         // assert
         CollectionAssert.AreEqual(expectedOutput, actualItems);
     }
+
+    [Test]
+    public async Task ShouldReorderStreamToBeInOrderSimple()
+    {
+        // arrange
+        var settings = new SequencePreservingBlockSettings()
+        {
+            SequenceInitialization = SequenceInitialization.From(1),
+            OnCompleteBufferedMessageBehavior = OnCompleteBufferedMessageBehavior.Discard,
+        };
+        var sequencePreservingBlock = new SequencePreservingBlock<string>(sequenceIndexExtractor: (item) => long.Parse(item), settings);
+
+        var actualItems = new List<string>();
+        var collectorBlock = new ActionBlock<string>(item => actualItems.Add(item));
+        sequencePreservingBlock.LinkTo(collectorBlock, new DataflowLinkOptions() { PropagateCompletion = true });
+
+        // act
+        sequencePreservingBlock.Post("3");
+        sequencePreservingBlock.Post("1");
+        sequencePreservingBlock.Post("2");
+        sequencePreservingBlock.Complete();
+        await collectorBlock.Completion;
+
+        // assert
+        CollectionAssert.AreEqual(new string[] { "1", "2", "3" }, actualItems);
+    }
 }

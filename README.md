@@ -9,20 +9,20 @@ Conceptual Example:
 ```txt
 Input Stream: 
 [
-	(time: 1pm, value: 1),
-	(time: 2pm, value: 2),
-	(time: 3pm, value: 3)
+    (time: 1pm, value: 1),
+    (time: 2pm, value: 2),
+    (time: 3pm, value: 3)
 ]
 Accumulator: window(int numItems, int valueOfItems)
 
 Beam Block on Input Stream:
-	- window size: 2 hours
-	- summary method: (item, window) => { window.numItems++; window.valueOfItems += item.value; }
+    - window size: 2 hours
+    - summary method: (item, window) => { window.numItems++; window.valueOfItems += item.value; }
 
 Output Stream:
 [
-	(numItems: 2, valueOfItems: 3), // time 1pm and time 2pm
-	(numItems: 1, valueOfItems: 3) // time 3pm
+    (numItems: 2, valueOfItems: 3), // time 1pm and time 2pm
+    (numItems: 1, valueOfItems: 3) // time 3pm
 ]
 ```
 
@@ -33,19 +33,44 @@ Conceptual Example:
 ```txt
 Input Stream: 
 [
-	(value: 1), // received at 1:00pm
-	(value: 2), // received at 1:01pm
-	(value: 3)  // received at 1:02pm 
+    (value: 1), // received at 1:00pm
+    (value: 2), // received at 1:01pm
+    (value: 3)  // received at 1:02pm 
 ]
 
 Throttle block on InputStream:
-	- Throttle to 1 emitted per 2 minutes.
+    - Throttle to 1 emitted per 2 minutes.
 
 Output Stream:
 [
-	(value: 1), // emitted at 1:00pm
-	(value: 2), // emitted at 1:02pm
-	(value: 3)  // emitted at 1:04pm 
+    (value: 1), // emitted at 1:00pm
+    (value: 2), // emitted at 1:02pm
+    (value: 3)  // emitted at 1:04pm 
+]
+```
+
+### SequencePreservingBlock
+SequencePreservingBlock can be inserted into a TPL Dataflow pipeline to reorder out-of-order messages when there's a known contiguous order. Useful in pub/sub environments where a broker does not guarantee message order. 
+
+Conceptual Example:
+```txt
+Input Stream: 
+[
+    (sequenceNumber: 3, value: 3)
+    (sequenceNumber: 1, value: 2),
+    (sequenceNumber: 2, value: 1),
+]
+
+SequencePreservingBlock block on InputStream:
+    - sequenceIndexExtractor: (message) => message.sequenceNumber
+    - SequenceInitialization: SequenceInitialization.From(sequenceNumber: 1)
+
+Output Stream:
+[
+    (sequenceNumber: 1, value: 2), // emitted right when the message came in. Sequence number matched the starting sequence number.
+    (sequenceNumber: 2, value: 1), // emitted right when the message came in. Was the next contiguous sequence number. 
+    (sequenceNumber: 3, value: 3)  // buffer when it initially came in. Still buffered when 1 was processed. Emitted at the same time as sequenceNumber 2 because it was contiguous.
+    // no pending messages when complete occurs.
 ]
 ```
 
@@ -106,7 +131,7 @@ public void ShouldAccumulateItemsIntoWindows()
 }
 ```
 
-### Throttle Block 
+### ThrottleBlock 
 ```csharp
 [Test]
 public void ShouldWaitForThrottleToElapseFor2ndEmit()
@@ -141,31 +166,109 @@ public void ShouldWaitForThrottleToElapseFor2ndEmit()
 }
 ```
 
+### SequencePreservingBlock 
+```csharp
+[Test]
+public async Task ShouldReorderStreamToBeInOrder()
+{
+    // arrange
+    var settings = new SequencePreservingBlockSettings()
+    {
+        SequenceInitialization = SequenceInitialization.From(1),
+        OnCompleteBufferedMessageBehavior = OnCompleteBufferedMessageBehavior.Discard,
+    };
+    var sequencePreservingBlock = new SequencePreservingBlock<string>(sequenceIndexExtractoror: (item) => long.Parse(item), settings);
+
+    var actualItems = new List<string>();
+    var collectorBlock = new ActionBlock<string>(item => actualItems.Add(item));
+    sequencePreservingBlock.LinkTo(collectorBlock, new DataflowLinkOptions() { PropagateCompletion = true });
+
+    // act
+    sequencePreservingBlock.Post("3");
+    sequencePreservingBlock.Post("1");
+    sequencePreservingBlock.Post("2");
+    sequencePreservingBlock.Complete();
+    await collectorBlock.Completion;
+
+    // assert
+    CollectionAssert.AreEqual(new string[] { "1", "2", "3" }, actualItems);
+}
+```
+
 # Settings
 ### BeamBlock
 - OmitIncompleteFinalWindow = `true` or `false`. Example:
   ```txt
     Input Stream: 
     [
-	    (time: 1pm, value: 1),
-	    (time: 2pm, value: 2),
-	    (time: 3pm, value: 3)
+        (time: 1pm, value: 1),
+        (time: 2pm, value: 2),
+        (time: 3pm, value: 3)
     ]
     Accumulator: window(int numItems, int valueOfItems)
 
     Beam Block on Input Stream:
-	    - window size: 2 hours
-	    - summary method: (item, window) => { window.numItems++; window.valueOfItems += item.value; }
+        - window size: 2 hours
+        - summary method: (item, window) => { window.numItems++; window.valueOfItems += item.value; }
 
     Output Stream with OmitIncompleteFinalWindow = false (default):
     [
-	    (numItems: 2, valueOfItems: 3), // time 1pm and time 2pm
-	    (numItems: 1, valueOfItems: 3) // time 3pm
+        (numItems: 2, valueOfItems: 3), // time 1pm and time 2pm
+        (numItems: 1, valueOfItems: 3) // time 3pm
     ] 
 
     Output Stream with OmitIncompleteFinalWindow = true:
     [
-	    (numItems: 2, valueOfItems: 3), // time 1pm and time 2pm; emitted on item3
+        (numItems: 2, valueOfItems: 3), // time 1pm and time 2pm; emitted on item3
         // item 3 not emitted; didn't receive an item >= 4pm.
+    ]
+  ```
+
+### SequencePreservingBlock
+- SequenceInitialization = `SequenceInitialization.FromFirstElement` or `SequenceInitialization.From(long inclusiveStartingSequenceNumber)`. Example:
+  ```txt
+    Input Stream: 
+    [
+        (sequenceNumber: 3, value: 3),
+        (sequenceNumber: 1, value: 1),
+        (sequenceNumber: 2, value: 2)
+    ]
+
+    SequencePreservingBlock block on InputStream:
+        - sequenceIndexExtractor: (message) => message.sequenceNumber
+
+    Output Stream with SequenceInitialization.FromFirstElement:
+    [
+        (sequenceNumber: 3, value: 3)
+    ] 
+
+    Output Stream with SequenceInitialization.From(sequenceNumber: 1):
+    [
+        (sequenceNumber: 1, value: 1),
+        (sequenceNumber: 2, value: 2),
+        (sequenceNumber: 3, value: 3)
+    ]
+  ```
+- OnCompleteBufferedMessageBehavior = `Discard` (default) or `Emit`. Example:
+  ```txt
+    Input Stream: 
+    [
+        (sequenceNumber: 1, value: 1),
+        (sequenceNumber: 3, value: 3)
+    ]
+
+    SequencePreservingBlock block on InputStream:
+        - sequenceIndexExtractor: (message) => message.sequenceNumber
+        - sequenceInitialization: SequenceInitialization.From(sequenceNumber: 1)
+
+    Output Stream with OnCompleteBufferedMessageBehavior.Discard:
+    [
+        (sequenceNumber: 1, value: 1)
+    ] 
+
+    Output Stream with OnCompleteBufferedMessageBehavior.Emit:
+    [
+        (sequenceNumber: 1, value: 1),
+        (sequenceNumber: 3, value: 3)
     ]
   ```
