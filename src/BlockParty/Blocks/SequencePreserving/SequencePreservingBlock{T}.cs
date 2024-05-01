@@ -7,6 +7,12 @@ using System.Threading.Tasks.Dataflow;
 
 namespace BlockParty.Blocks.SequencePreserving
 {
+    /// <summary>
+    /// SequencePreservingBlock allows you to reorder streams when there's a known contiguous order. This can be useful when doing in-order processing in a pub/sub context where a message broker might not preserve the order.<br/>
+    /// There is no watermark - messages before the initial sequence are dropped and non-contiguous messages can be buffered indefinitely. Beware of memory constraints.<br/><br/>
+    /// 
+    /// See <a href="https://github.com/hotfix-houdini/block-party">GitHub</a> for more details.
+    /// </summary>
     public class SequencePreservingBlock<T> : IPropagatorBlock<T, T>, IReceivableSourceBlock<T>
     {
         public delegate long SequenceIndexExtractor(T item);
@@ -20,6 +26,15 @@ namespace BlockParty.Blocks.SequencePreserving
         private bool _sequenceSet = false;
         private long _sequenceNumber = 0;
 
+        /// <summary>
+        /// SequencePreservingBlock allows you to reorder streams when there's a known contiguous order. This can be useful when doing in-order processing in a pub/sub context where a message broker might not preserve the order.<br/>
+        /// There is no watermark - messages before the initial sequence are dropped and non-contiguous messages can be buffered indefinitely. Beware of memory constraints.<br/><br/>
+        /// 
+        ///  <param name="sequenceIndexExtractor">- sequenceIndexExtractor is a lambda to select / construct the sequence number.</param><br/>
+        ///  <param name="settings">- settings allows options for determining the initial sequence number and OnComplete behavior of buffered messages, if any.</param><br/><br/>
+        ///  
+        /// See <a href="https://github.com/hotfix-houdini/block-party">GitHub</a> for more details.
+        /// </summary>
         public SequencePreservingBlock(SequenceIndexExtractor sequenceIndexExtractor, SequencePreservingBlockSettings settings)
         {
             _sequenceIndexExtractor = sequenceIndexExtractor;
