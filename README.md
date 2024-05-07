@@ -74,6 +74,29 @@ Output Stream:
 ]
 ```
 
+### FilterBlock
+FilterBlock can be inserted into a TPL Dataflow pipeline to gatekeep the stream by a lambda method. 
+
+Conceptual Example:
+```txt
+Input Stream: 
+[
+    (value: 3)
+    (value: 2),
+    (value: 1),
+]
+
+FilterBlock block on InputStream:
+    - predicate: (message) => message.value >= 2
+
+Output Stream:
+[
+    (value: 3),
+    (value: 2),
+    // value 1 discarded because it did not pass the predicate.
+]
+```
+
 
 # Samples
 ### BeamBlock
@@ -192,6 +215,31 @@ public async Task ShouldReorderStreamToBeInOrder()
 
     // assert
     CollectionAssert.AreEqual(new string[] { "1", "2", "3" }, actualItems);
+}
+```
+
+### FilterBlock 
+```csharp
+[Test]
+public async Task ShouldFilterForEvenNumbersOnly()
+{
+    // arrange
+    var filterBlock = new FliterBlock<int>(x => x % 2 == 0); // even #'s only
+
+    var actualOutputs = new List<int>();
+    var outputCollector = new ActionBlock<int>(x => actualOutputs.Add(x));
+    filterBlock.LinkTo(outputCollector, new DataflowLinkOptions() { PropagateCompletion = true });
+
+    // act
+    for (int i = 0; i < 10; i++)
+    {
+        filterBlock.Post(i);
+    }
+    filterBlock.Complete();
+    await outputCollector.Completion;
+
+    // assert
+    CollectionAssert.AreEqual(new List<int>() { 0, 2, 4, 6, 8}, actualOutputs);
 }
 ```
 
