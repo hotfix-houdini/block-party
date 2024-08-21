@@ -12,20 +12,20 @@ public class AggregatorBlockTests
         {
             return $"{i}";
         });
-        var aggregagtorBlock = new AggregatorBlock<int, string, (int, string)>(innerBlock, (input, output) =>
+        var aggregatorBlock = new AggregatorBlock<int, string, (int, string)>(innerBlock, (input, output) =>
         {
             return (input + 1, output);
         });
         var aggregatedValues = new List<(int, string)>();
         var collectorBlock = new ActionBlock<(int, string)>(aggregatedValues.Add);
 
-        aggregagtorBlock.LinkTo(collectorBlock, new DataflowLinkOptions() { PropagateCompletion = true });
+        aggregatorBlock.LinkTo(collectorBlock, new DataflowLinkOptions() { PropagateCompletion = true });
 
         // act
-        aggregagtorBlock.Post(1);
-        aggregagtorBlock.Post(2);
-        aggregagtorBlock.Post(3);
-        aggregagtorBlock.Complete();
+        aggregatorBlock.Post(1);
+        aggregatorBlock.Post(2);
+        aggregatorBlock.Post(3);
+        aggregatorBlock.Complete();
         await collectorBlock.Completion;
 
         // assert
