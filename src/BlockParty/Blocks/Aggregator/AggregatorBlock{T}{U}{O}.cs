@@ -5,11 +5,29 @@ using System.Threading.Tasks.Dataflow;
 
 namespace BlockParty.Blocks.Aggregator
 {
+    /// <summary>
+    /// AggregatorBlock allows you to wrap any propagator block and select out a new output as a function of (input, output).
+    /// This lets us develop simple input-output blocks while being able to carry inputs forward to the next stage of blocks. <br/>
+    /// 
+    /// <param name="innerBlock">The wrapped block that data will flow through, with the option of selecting the final output as f(input, innerBlockOutput).</param><br/><br/>
+    /// <param name="aggregatorLambda"> The final output defined by f(input, innerBlockOutput). </param><br/><br/>
+    /// 
+    /// See <a href="https://github.com/hotfix-houdini/block-party">GitHub</a> for more details.
+    /// </summary>
     public class AggregatorBlock<T, U, O> : IPropagatorBlock<T, O>, IReceivableSourceBlock<O>
     {
         private readonly ITargetBlock<T> m_target;
         private readonly IReceivableSourceBlock<O> m_source;
 
+        /// <summary>
+        /// AggregatorBlock allows you to wrap any propagator block and select out a new output as a function of (input, output).
+        /// This lets us develop simple input-output blocks while being able to carry inputs forward to the next stage of blocks. <br/>
+        /// 
+        /// <param name="innerBlock">The wrapped block that data will flow through, with the option of selecting the final output as f(input, innerBlockOutput).</param><br/><br/>
+        /// <param name="aggregatorLambda"> The final output defined by f(input, innerBlockOutput). </param><br/><br/>
+        /// 
+        /// See <a href="https://github.com/hotfix-houdini/block-party">GitHub</a> for more details.
+        /// </summary>
         public AggregatorBlock(IPropagatorBlock<T, U> innerBlock, Func<T, U, O> aggregatorLambda)
         {
             var linkOptions = new DataflowLinkOptions()
