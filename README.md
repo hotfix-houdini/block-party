@@ -97,6 +97,30 @@ Output Stream:
 ]
 ```
 
+### AggregatorBlock
+AggregatorBlock can be inserted into a TPL Dataflow pipeline to wrap any other propagator block and select out a different output as a function of (input, originalBlockOutput). 
+
+Conceptual Example:
+```txt
+Input Stream: 
+[
+    (value: 3)
+    (value: 2),
+    (value: 1),
+]
+
+AggregatorBlock on InputStream: 
+    - innerBlock: TransformBlock(message => message + 42)
+    - aggregatorLambda: (input, originalOutput) => $"{input}-{originalOutput}";
+
+Output Stream:
+[
+    (value: "3-45"),
+    (value: "2-44"),
+    (value: "1-43"),
+]
+```
+
 
 # Samples
 ### BeamBlock
@@ -240,6 +264,40 @@ public async Task ShouldFilterForEvenNumbersOnly()
 
     // assert
     CollectionAssert.AreEqual(new List<int>() { 0, 2, 4, 6, 8}, actualOutputs);
+}
+```
+
+### AggregatorBlock 
+```csharp
+[Test]
+public async Task ShouldAggregateInputAndOutputToFinalValue()
+{
+    // arrange
+    var innerBlock = new TransformBlock<int, string>(i =>
+    {
+        return $"{i}";
+    });
+    var aggregagtorBlock = new AggregatorBlock<int, string, (int, string)>(innerBlock, (input, output) =>
+    {
+        return (input + 1, output);
+    });
+    var aggregatedValues = new List<(int, string)>();
+    var collectorBlock = new ActionBlock<(int, string)>(aggregatedValues.Add);
+
+    aggregagtorBlock.LinkTo(collectorBlock, new DataflowLinkOptions() { PropagateCompletion = true });
+
+    // act
+    aggregagtorBlock.Post(1);
+    aggregagtorBlock.Post(2);
+    aggregagtorBlock.Post(3);
+    aggregagtorBlock.Complete();
+    await collectorBlock.Completion;
+
+    // assert
+    Assert.That(aggregatedValues, Has.Count.EqualTo(3));
+    Assert.That(aggregatedValues[0], Is.EqualTo((2, "1")));
+    Assert.That(aggregatedValues[1], Is.EqualTo((3, "2")));
+    Assert.That(aggregatedValues[2], Is.EqualTo((4, "3")));
 }
 ```
 
