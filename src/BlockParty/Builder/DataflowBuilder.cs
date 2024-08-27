@@ -40,6 +40,17 @@ namespace BlockParty.Builder
 
         public DataflowBuilder<TSource> Select(Func<TSource, TSource> lambda)
         {
+            /* ToDo for transforming to a different type
+             * 
+             * IF same type, extend current dataflowbuilder chain?
+             * IF new type, instantiate a new dataflowBuilder<newtype>? And nest within the top level one
+             * IF it gets transformed into a new type, encapsulate and roll up to the parent mayhaps? 
+             * or maybe we just always have either a _lastBlock and/or a List<dataflowbuilders> subchains? 
+             * 
+             * 
+             */
+
+
             var newBlock = new TransformBlock<TSource, TSource>(upstream => lambda(upstream));
 
             if (_lastBlock == null)

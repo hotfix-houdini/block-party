@@ -14,13 +14,11 @@ public class DataflowBuilderTests
         var pipeline = new DataflowBuilder<int>(sourceStream) // todo, figure out if we accept the source stream in a builder, OR, can simply make like a "make the next block" 
             .Where(x => x % 2 == 0)
             .Build();
-        var downStream = await ReadAllAsync(pipeline);
+        var results = await ReadAllAsync(pipeline);
 
         // assert
-        Assert.That(downStream, Has.Count.EqualTo(3));
-        Assert.That(downStream[0], Is.EqualTo(0));
-        Assert.That(downStream[1], Is.EqualTo(2));
-        Assert.That(downStream[2], Is.EqualTo(4));
+        int[] expected = [0, 2, 4];
+        CollectionAssert.AreEqual(expected, results);
     }
 
     [Test]
@@ -34,12 +32,11 @@ public class DataflowBuilderTests
             .Where(x => x % 2 == 0)
             .Where(x => x != 4)
             .Build();
-        var downStream = await ReadAllAsync(pipeline);
+        var results = await ReadAllAsync(pipeline);
 
         // assert
-        Assert.That(downStream, Has.Count.EqualTo(2));
-        Assert.That(downStream[0], Is.EqualTo(0));
-        Assert.That(downStream[1], Is.EqualTo(2));
+        int[] expected = [0, 2];
+        CollectionAssert.AreEqual(expected, results);
     }
 
     [Test]
@@ -52,13 +49,11 @@ public class DataflowBuilderTests
         var pipeline = new DataflowBuilder<int>(sourceStream)
             .Select(x => x * 2)
             .Build();
-        var downStream = await ReadAllAsync(pipeline);
+        var results = await ReadAllAsync(pipeline);
 
         // assert
-        Assert.That(downStream, Has.Count.EqualTo(3));
-        Assert.That(downStream[0], Is.EqualTo(0));
-        Assert.That(downStream[1], Is.EqualTo(2));
-        Assert.That(downStream[2], Is.EqualTo(4));
+        int[] expected = [0, 2, 4];
+        CollectionAssert.AreEqual(expected, results);
     }
 
     [Test]
@@ -72,13 +67,11 @@ public class DataflowBuilderTests
             .Select(x => x * 2)
             .Select(x => x + 1)
             .Build();
-        var downStream = await ReadAllAsync(pipeline);
+        var results = await ReadAllAsync(pipeline);
 
         // assert
-        Assert.That(downStream, Has.Count.EqualTo(3));
-        Assert.That(downStream[0], Is.EqualTo(1));
-        Assert.That(downStream[1], Is.EqualTo(3));
-        Assert.That(downStream[2], Is.EqualTo(5));
+        int[] expected = [1, 3, 5];
+        CollectionAssert.AreEqual(expected, results);
     }
 
     [Test]
@@ -94,12 +87,11 @@ public class DataflowBuilderTests
             .Where(x => x < 6) // 2, 4
             .Select(x => x - 2) // 0, 2
             .Build();
-        var downStream = await ReadAllAsync(pipeline);
+        var results = await ReadAllAsync(pipeline);
 
         // assert
-        Assert.That(downStream, Has.Count.EqualTo(2));
-        Assert.That(downStream[0], Is.EqualTo(0));
-        Assert.That(downStream[1], Is.EqualTo(2));
+        int[] expected = [0, 2];
+        CollectionAssert.AreEqual(expected, results);
     }
 
     // should allow transforms to different types
