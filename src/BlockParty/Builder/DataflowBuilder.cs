@@ -4,25 +4,25 @@ using System.Threading.Tasks.Dataflow;
 
 namespace BlockParty.Builder
 {
-    public class DataflowBuilder<TSource>
+    public class DataflowBuilder<T>
     {
-        private readonly ISourceBlock<TSource> _inputBlock; // necessary or nah?
-        private IPropagatorBlock<TSource, TSource> _lastBlock;
-        private BufferBlock<TSource> _outputBlock = new BufferBlock<TSource>();
+        private readonly ISourceBlock<T> _inputBlock;
+        private IPropagatorBlock<T, T> _lastBlock;
+        private readonly BufferBlock<T> _outputBlock = new BufferBlock<T>();
 
         private static readonly DataflowLinkOptions _linkOptions = new DataflowLinkOptions()
         {
             PropagateCompletion = true
         };
 
-        public DataflowBuilder(ISourceBlock<TSource> sourceBlock)
+        public DataflowBuilder(ISourceBlock<T> sourceBlock)
         {
             _inputBlock = sourceBlock;
         }
 
-        public DataflowBuilder<TSource> Where(FliterBlock<TSource>.Predicate predicate)
+        public DataflowBuilder<T> Where(FliterBlock<T>.Predicate predicate)
         {
-            var newBlock = new FliterBlock<TSource>(predicate);
+            var newBlock = new FliterBlock<T>(predicate);
 
             if (_lastBlock == null)
             {
@@ -38,46 +38,34 @@ namespace BlockParty.Builder
             return this;
         }
 
-        public DataflowBuilder<TSource> Select(Func<TSource, TSource> lambda)
+        public DataflowBuilder<TOutput> Select<TOutput>(Func<T, TOutput> lambda)
         {
-            /* ToDo for transforming to a different type
-             * 
-             * IF same type, extend current dataflowbuilder chain?
-             * IF new type, instantiate a new dataflowBuilder<newtype>? And nest within the top level one
-             * IF it gets transformed into a new type, encapsulate and roll up to the parent mayhaps? 
-             * or maybe we just always have either a _lastBlock and/or a List<dataflowbuilders> subchains? 
-             * 
-             * 
-             */
-
-
-            var newBlock = new TransformBlock<TSource, TSource>(upstream => lambda(upstream));
+            var newBlock = new TransformBlock<T, TOutput>(lambda);
 
             if (_lastBlock == null)
             {
-                _lastBlock = newBlock;
-                _inputBlock.LinkTo(_lastBlock, _linkOptions);
+                _inputBlock.LinkTo(newBlock, _linkOptions);
             }
             else
             {
                 _lastBlock.LinkTo(newBlock, _linkOptions);
-                _lastBlock = newBlock;
             }
 
-            return this;
+            return new DataflowBuilder<TOutput>(newBlock);
         }
 
-        public BufferBlock<TSource> Build()
+        public BufferBlock<T> Build()
         {
             if (_lastBlock == null)
             {
-                throw new ArgumentException("Build() called without constructing a pipeline");
+                _inputBlock.LinkTo(_outputBlock, _linkOptions);
             }
-
-            _lastBlock.LinkTo(_outputBlock, _linkOptions);
+            else
+            {
+                _lastBlock.LinkTo(_outputBlock, _linkOptions);
+            }
+            
             return _outputBlock;
-
-            //return DataflowBlock.Encapsulate<TSource, TSource>(_sourceBlock, _filterBlock1); // figure out if I SOURCE 
         }
     }
 }

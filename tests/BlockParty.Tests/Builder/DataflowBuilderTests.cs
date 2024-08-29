@@ -94,7 +94,44 @@ public class DataflowBuilderTests
         CollectionAssert.AreEqual(expected, results);
     }
 
-    // should allow transforms to different types
+    [Test]
+    public async Task Select_ShouldAllowTransformsToDifferentTypes()
+    {
+        // arrange
+        var sourceStream = BufferBlockFromList([0, 1, 2]);
+
+        // act
+        var pipeline = new DataflowBuilder<int>(sourceStream)
+            .Select(x => $"{x}-str")
+            .Build();
+        var results = await ReadAllAsync(pipeline);
+
+        // assert
+        string[] expected = ["0-str", "1-str", "2-str"];
+        CollectionAssert.AreEqual(expected, results);
+    }
+
+    [Test]
+    public async Task SelectWheresAndTransformsShouldAllWork()
+    {
+        // arrange
+        var sourceStream = BufferBlockFromList([0, 1, 2, 3, 4, 5]);
+
+        // act
+        var pipeline = new DataflowBuilder<int>(sourceStream)
+            .Where(x => x % 2 == 0) // 0, 2, 4
+            .Select(x => $"{x}") // "0", "2", "4"
+            .Where(x => int.Parse(x) > 0) // "2", "4"
+            .Select(x => int.Parse(x) * 2) // 4, 8
+            .Where(x => x > 5) // 8
+            .Select(x => x == 8 ? "ate" : "hungry") // "ate"
+            .Build();
+        var results = await ReadAllAsync(pipeline);
+
+        // assert
+        string[] expected = ["ate"];
+        CollectionAssert.AreEqual(expected, results);
+    }
 
     private ISourceBlock<T> BufferBlockFromList<T>(List<T> list)
     {
@@ -118,9 +155,4 @@ public class DataflowBuilderTests
         await bufferBlock.Completion;
         return results;
     }
-
-    // should propagate completition 
-    // todo make awesome test-builder/test cases. (i.e. stream inputs, the chain, then expected outputstreams)
-    
-    // indefinite chains (many different wheres and transforms)
 }
