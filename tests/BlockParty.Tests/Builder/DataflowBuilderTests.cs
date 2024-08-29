@@ -4,94 +4,73 @@ using System.Threading.Tasks.Dataflow;
 namespace BlockParty.Tests.Builder;
 public class DataflowBuilderTests
 {
-    [Test]
-    public async Task Where_ShouldFilterStream()
+    [Theory]
+    [TestCaseSource(nameof(DataPipelineShouldFlowTestCases))]
+    public async Task DataPipelineShouldFlow<TInput, TOutput>(
+        TInput[] input,
+        Func<ISourceBlock<TInput>, DataflowBuilder<TOutput>> pipelineBuilder,
+        TOutput[] expectedOutput)
     {
         // arrange
-        var sourceStream = BufferBlockFromList([0, 1, 2, 3, 4, 5]);
+        var data = BufferBlockFromList(input);
+        var pipeline = pipelineBuilder(data).Build();
 
         // act
-        var pipeline = new DataflowBuilder<int>(sourceStream) // todo, figure out if we accept the source stream in a builder, OR, can simply make like a "make the next block" 
-            .Where(x => x % 2 == 0)
-            .Build();
         var results = await ReadAllAsync(pipeline);
 
         // assert
-        int[] expected = [0, 2, 4];
-        CollectionAssert.AreEqual(expected, results);
+        CollectionAssert.AreEqual(expectedOutput, results);
     }
 
-    [Test]
-    public async Task Where_ShouldSupportMultpleWheres()
+    public static IEnumerable<TestCaseData> DataPipelineShouldFlowTestCases()
     {
-        // arrange
-        var sourceStream = BufferBlockFromList([0, 1, 2, 3, 4, 5]);
+        yield return new TestCaseData(
+            array([0, 1, 2, 3, 4, 5]),
+            builder<int>(b => b
+                .Where(x => x % 2 == 0)),
+            array([0, 2, 4])
+        ).SetName("where should filter stream");
 
-        // act
-        var pipeline = new DataflowBuilder<int>(sourceStream)
-            .Where(x => x % 2 == 0)
-            .Where(x => x != 4)
-            .Build();
-        var results = await ReadAllAsync(pipeline);
+        yield return new TestCaseData(
+            array([0, 1, 2, 3, 4, 5]),
+            builder<int>(b => b
+                .Where(x => x % 2 == 0)
+                .Where(x => x != 4)),
+            array([0, 2])
+        ).SetName("builder should support multiple wheres");
 
-        // assert
-        int[] expected = [0, 2];
-        CollectionAssert.AreEqual(expected, results);
-    }
+        yield return new TestCaseData(
+            array([0, 1, 2]),
+            builder<int>(b => b
+                .Select(x => x * 2)),
+            array([0, 2, 4])
+        ).SetName("select should transform stream");
 
-    [Test]
-    public async Task Select_ShoulTransformStream()
-    {
-        // arrange
-        var sourceStream = BufferBlockFromList([0, 1, 2]);
+        yield return new TestCaseData(
+            array([0, 1, 2]),
+            builder<int>(b => b
+                .Select(x => x * 2)
+                .Select(x => x + 1)),
+            array([1, 3, 5])
+        ).SetName("builder should support multiple selects");
 
-        // act
-        var pipeline = new DataflowBuilder<int>(sourceStream)
-            .Select(x => x * 2)
-            .Build();
-        var results = await ReadAllAsync(pipeline);
+        yield return new TestCaseData(
+            array([0, 1, 2, 3, 4, 5]),
+            builder<int>(b => b
+                .Where(x => x % 2 == 1) // 1, 3, 5
+                .Select(x => x + 1)     // 2, 4, 6
+                .Where(x => x < 6)      // 2, 4
+                .Select(x => x - 2)),   // 0, 2,
+            array([0, 2])
+        ).SetName("select and wheres should be interchangeable");
 
-        // assert
-        int[] expected = [0, 2, 4];
-        CollectionAssert.AreEqual(expected, results);
-    }
-
-    [Test]
-    public async Task Select_ShouldSupportMultiple()
-    {
-        // arrange
-        var sourceStream = BufferBlockFromList([0, 1, 2]);
-
-        // act
-        var pipeline = new DataflowBuilder<int>(sourceStream)
-            .Select(x => x * 2)
-            .Select(x => x + 1)
-            .Build();
-        var results = await ReadAllAsync(pipeline);
-
-        // assert
-        int[] expected = [1, 3, 5];
-        CollectionAssert.AreEqual(expected, results);
-    }
-
-    [Test]
-    public async Task SelectAndWhere_ShouldBeInterchangeable()
-    {
-        // arrange
-        var sourceStream = BufferBlockFromList([0, 1, 2, 3, 4, 5]);
-
-        // act
-        var pipeline = new DataflowBuilder<int>(sourceStream)
-            .Where(x => x % 2 == 1) // 1, 3, 5
-            .Select(x => x + 1) // 2, 4, 6
-            .Where(x => x < 6) // 2, 4
-            .Select(x => x - 2) // 0, 2
-            .Build();
-        var results = await ReadAllAsync(pipeline);
-
-        // assert
-        int[] expected = [0, 2];
-        CollectionAssert.AreEqual(expected, results);
+        // todo re-introduce when builder is data-agnostic as a first-class-citizen
+        //yield return new TestCaseData(
+        //    array([0, 1, 2]),
+        //    builder<int>(b => b
+        //        .Select(x => $"{x}-str")),
+        //    array(["0-str", "1-str", "2-str"])
+        //).SetName("select should support transforming to different types");
     }
 
     [Test]
@@ -133,10 +112,10 @@ public class DataflowBuilderTests
         CollectionAssert.AreEqual(expected, results);
     }
 
-    private ISourceBlock<T> BufferBlockFromList<T>(List<T> list)
+    private ISourceBlock<T> BufferBlockFromList<T>(IEnumerable<T> collection)
     {
         var block = new BufferBlock<T>();
-        foreach (var item in list)
+        foreach (var item in collection)
         {
             block.Post(item);
         }
@@ -154,5 +133,11 @@ public class DataflowBuilderTests
         }
         await bufferBlock.Completion;
         return results;
+    }
+
+    private static T[] array<T>(params T[] elements) => elements;
+    private static Func<ISourceBlock<T>, DataflowBuilder<T>> builder<T>(Func<DataflowBuilder<T>, DataflowBuilder<T>> configure)
+    {
+        return sourceStream => configure(new DataflowBuilder<T>(sourceStream));
     }
 }
