@@ -25,6 +25,13 @@ public class DataflowBuilderTests
     public static IEnumerable<TestCaseData> DataPipelineShouldFlowTestCases()
     {
         yield return new TestCaseData(
+            array(["1", "2", "3"]),
+            new DataflowBuilder<string>()
+                .Build(),
+            array(["1", "2", "3"])
+        ).SetName("pipeline with no changes just propagates");
+
+        yield return new TestCaseData(
             array([0, 1, 2, 3, 4, 5]),
             new DataflowBuilder<int>()
                 .Where(x => x % 2 == 0)

@@ -41,7 +41,7 @@ namespace BlockParty.Builder
         {
             if (_lastBlock == null)
             {
-                throw new NotImplementedException(); // todo
+                return _sourceBlock;
             }
             else
             {
