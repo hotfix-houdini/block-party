@@ -4,68 +4,63 @@ using System.Threading.Tasks.Dataflow;
 
 namespace BlockParty.Builder
 {
-    public class DataflowBuilder<T>
+    public class DataflowBuilder<TCurrentType>
     {
-        private readonly ISourceBlock<T> _inputBlock;
-        private IPropagatorBlock<T, T> _lastBlock;
-        private readonly BufferBlock<T> _outputBlock = new BufferBlock<T>();
+        protected readonly BufferBlock<TCurrentType> _sourceBlock;
+        protected IPropagatorBlock<TCurrentType, TCurrentType> _lastBlock;
 
-        private static readonly DataflowLinkOptions _linkOptions = new DataflowLinkOptions()
+        protected static readonly DataflowLinkOptions _linkOptions = new DataflowLinkOptions()
         {
             PropagateCompletion = true
         };
 
-        public DataflowBuilder(ISourceBlock<T> sourceBlock)
+        public DataflowBuilder() : this(new BufferBlock<TCurrentType>())
         {
-            _inputBlock = sourceBlock;
         }
 
-        public DataflowBuilder<T> Where(FliterBlock<T>.Predicate predicate)
+        protected DataflowBuilder(BufferBlock<TCurrentType> originalBlock)
         {
-            var newBlock = new FliterBlock<T>(predicate);
+            _sourceBlock = originalBlock;
+        }
 
-            if (_lastBlock == null)
-            {
-                _lastBlock = newBlock;
-                _inputBlock.LinkTo(_lastBlock, _linkOptions);
-            }
-            else
-            {
-                _lastBlock.LinkTo(newBlock, _linkOptions);
-                _lastBlock = newBlock;
-            }
-
+        public DataflowBuilder<TCurrentType> Where(FliterBlock<TCurrentType>.Predicate predicate)
+        {
+            var newBlock = new FliterBlock<TCurrentType>(predicate);
+            AddBlock(newBlock);
             return this;
         }
 
-        public DataflowBuilder<TOutput> Select<TOutput>(Func<T, TOutput> lambda)
+        public DataflowBuilder<TCurrentType> Select(Func<TCurrentType, TCurrentType> lambda)
         {
-            var newBlock = new TransformBlock<T, TOutput>(lambda);
+            var newBlock = new TransformBlock<TCurrentType, TCurrentType>(lambda);
+            AddBlock(newBlock);
+            return this;
+        }
 
+        public IPropagatorBlock<TCurrentType, TCurrentType> Build()
+        {
             if (_lastBlock == null)
             {
-                _inputBlock.LinkTo(newBlock, _linkOptions);
+                throw new NotImplementedException(); // todo
+            }
+            else
+            {
+                return DataflowBlock.Encapsulate<TCurrentType, TCurrentType>(_sourceBlock, _lastBlock);
+            }
+        }
+
+        private void AddBlock(IPropagatorBlock<TCurrentType, TCurrentType> newBlock)
+        {
+            if (_lastBlock == null)
+            {
+                _lastBlock = newBlock;
+                _sourceBlock.LinkTo(_lastBlock, _linkOptions);
             }
             else
             {
                 _lastBlock.LinkTo(newBlock, _linkOptions);
+                _lastBlock = newBlock;
             }
-
-            return new DataflowBuilder<TOutput>(newBlock);
-        }
-
-        public BufferBlock<T> Build()
-        {
-            if (_lastBlock == null)
-            {
-                _inputBlock.LinkTo(_outputBlock, _linkOptions);
-            }
-            else
-            {
-                _lastBlock.LinkTo(_outputBlock, _linkOptions);
-            }
-            
-            return _outputBlock;
         }
     }
 }
