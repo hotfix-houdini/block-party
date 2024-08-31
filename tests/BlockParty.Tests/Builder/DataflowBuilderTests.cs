@@ -29,7 +29,7 @@ public class DataflowBuilderTests
             new DataflowBuilder<string>()
                 .Build(),
             array(["1", "2", "3"])
-        ).SetName("pipeline with no changes just propagates");
+        ).SetName("build first just propagates");
 
         yield return new TestCaseData(
             array([0, 1, 2, 3, 4, 5]),
@@ -76,57 +76,46 @@ public class DataflowBuilderTests
             array([0, 2])
         ).SetName("select and wheres should be interchangeable");
 
-        // todo re-introduce when builder is data-agnostic as a first-class-citizen
-        //yield return new TestCaseData(
-        //    array([0, 1, 2]),
-        //    builder<int>(b => b
-        //        .Select(x => $"{x}-str")),
-        //    array(["0-str", "1-str", "2-str"])
-        //).SetName("select should support transforming to different types");
+        yield return new TestCaseData(
+            array([0, 1, 2]),
+            new DataflowBuilder<int>()
+                .Select(x => $"{x}-str")
+                .Build(),
+            array(["0-str", "1-str", "2-str"])
+        ).SetName("select should support transforming to different types");
+
+        yield return new TestCaseData(
+            array([0, 1, 2, 3, 4, 5]),
+            new DataflowBuilder<int>()
+                .Where(x => x % 2 == 0) // 0, 2, 4
+                .Select(x => $"{x}") // "0", "2", "4"
+                .Build(),
+            array(["0", "2", "4"])
+        ).SetName("should allow where before select to different type");
+
+        yield return new TestCaseData(
+            array([0, 1, 2, 3, 4, 5]),
+            new DataflowBuilder<int>()
+                .Where(x => x % 2 == 0) // 0, 2, 4
+                .Select(x => $"{x}") // "0", "2", "4"
+                .Where(x => int.Parse(x) > 0) // "2", "4"
+                .Build(),
+            array(["2", "4"])
+        ).SetName("should allow where after select to different type");
+
+        yield return new TestCaseData(
+            array([0, 1, 2, 3, 4, 5]),
+            new DataflowBuilder<int>()
+                .Where(x => x % 2 == 0) // 0, 2, 4
+                .Select(x => $"{x}") // "0", "2", "4"
+                .Where(x => int.Parse(x) > 0) // "2", "4"
+                .Select(x => int.Parse(x) * 2) // 4, 8
+                .Where(x => x > 5) // 8
+                .Select(x => x == 8 ? "ate" : "hungry") // "ate"
+                .Build(),
+            array(["ate"])
+        ).SetName("multiple select, wheres, and transforms, should all work");
     }
-
-    //[Test]
-    //public async Task Select_ShouldAllowTransformsToDifferentTypes()
-    //{
-    //    // arrange
-    //    var sourceStream = BufferBlockFromList([0, 1, 2]);
-
-    //    // act
-    //    var pipeline = new DataflowBuilder<int>(sourceStream)
-    //        .Select(x => $"{x}-str")
-    //        .Build();
-    //    var results = await ReadAllAsync(pipeline);
-
-    //    // assert
-    //    string[] expected = ["0-str", "1-str", "2-str"];
-    //    CollectionAssert.AreEqual(expected, results);
-    //}
-
-    //[Test]
-    //public async Task SelectWheresAndTransformsShouldAllWork()
-    //{
-    //    // arrange
-    //    var sourceStream = BufferBlockFromList([0, 1, 2, 3, 4, 5]);
-
-    //    // act
-    //    // make build produce an IPropagator block?
-    //    // have an overload for build that's "Build For" source stream?? so we don't have to do the linking and what not.p
-
-    //    //var pipeline = new DataflowBuilder<int>(sourceStream)
-    //    var pipeline = new DataflowBuilder<int>()
-    //        .Where(x => x % 2 == 0) // 0, 2, 4
-    //        .Select(x => $"{x}") // "0", "2", "4"
-    //        .Where(x => int.Parse(x) > 0) // "2", "4"
-    //        .Select(x => int.Parse(x) * 2) // 4, 8
-    //        .Where(x => x > 5) // 8
-    //        .Select(x => x == 8 ? "ate" : "hungry") // "ate"
-    //        .Build();
-    //    var results = await ReadAllAsync(pipeline);
-
-    //    // assert
-    //    string[] expected = ["ate"];
-    //    CollectionAssert.AreEqual(expected, results);
-    //}
 
     private ISourceBlock<T> CompletedBufferBlockFromList<T>(IEnumerable<T> collection)
     {
