@@ -85,6 +85,15 @@ public class DataflowBuilderTests
         ).SetName("select should support transforming to different types");
 
         yield return new TestCaseData(
+            Array([0, 1, 2]),
+            new DataflowBuilder<int>()
+                .Select(x => $"{x}-str") // int -> str
+                .Select(x => new { A = x }) // str -> anon object
+                .Build(),
+            Array([new { A = "0-str" }, new { A = "1-str" }, new { A = "2-str" }])
+        ).SetName("select should support multiple type transforms");
+
+        yield return new TestCaseData(
             Array([0, 1, 2, 3, 4, 5]),
             new DataflowBuilder<int>()
                 .Where(x => x % 2 == 0) // 0, 2, 4
