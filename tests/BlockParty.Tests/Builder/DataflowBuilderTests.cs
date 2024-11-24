@@ -124,6 +124,18 @@ public class DataflowBuilderTests
                 .Build(),
             Array(["ate"])
         ).SetName("multiple select, wheres, and transforms, should all work");
+
+        yield return new TestCaseData(
+            Array([0, 1, 2, 3, 4, 5]),
+            new DataflowBuilder<int>()
+                .Where(x => x % 2 == 0) // 0, 2, 4
+                .FanoutWithJoin(
+                    chain1 => chain1.Select(x => x * 2),        // 0, 4, 8
+                    chain2 => chain2.Select(x => x.ToString())  // "0", "2", "4"
+                    ) // (0, "0"), (4, "2"), (8, "4")
+                .Build(),
+            Array([(0, "0"), (4, "2"), (8, "4")])
+        ).SetName("fanout-with-join-2 should split and join");
     }
 
     private static T[] Array<T>(params T[] elements) => elements;
