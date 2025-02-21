@@ -173,6 +173,15 @@ public class DataflowBuilderTests
                 .Build(),
             Array(6, 6, 8, 8, 10, 10)
         ).SetName("complicated select manys");
+
+        // just checking the runtime of the test
+        yield return new TestCaseData(
+            Array([0, 1, 2]),
+            new DataflowBuilder<int>()
+                .ForEach(async doneResult => await Task.Delay(100))
+                .Build(),
+            Array([DoneResult.Instance, DoneResult.Instance, DoneResult.Instance])
+        ).SetName("should be able to do async/await for each");
     }
 
     private static T[] Array<T>(params T[] elements) => elements;

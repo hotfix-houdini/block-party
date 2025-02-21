@@ -1,5 +1,6 @@
 ﻿using BlockParty.Blocks.Filter;
 using System;
+using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
 namespace BlockParty.Builder
@@ -52,7 +53,18 @@ namespace BlockParty.Builder
             {
                 lambda(input);
                 return DoneResult.Instance;
-                });
+            });
+            AddBlock(newBlock);
+            return new DataflowBuilder<TInput, DoneResult>(_sourceBlock, newBlock);
+        }
+
+        public DataflowBuilder<TInput, DoneResult> ForEach(Func<TOutput, Task> lambda)
+        {
+            var newBlock = new TransformBlock<TOutput, DoneResult>(async input =>
+            {
+                await lambda(input);
+                return DoneResult.Instance;
+            });
             AddBlock(newBlock);
             return new DataflowBuilder<TInput, DoneResult>(_sourceBlock, newBlock);
         }
