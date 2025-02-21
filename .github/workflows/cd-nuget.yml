@@ -32,4 +32,4 @@ jobs:
       CSPROJ_PATH: 'src/BlockParty/BlockParty.csproj'
       DOTNET_VERSION: '8.0.x'
       NUGET_PACKAGE_VERSION: ${{ inputs.version }}
-      PACKAGE_SOURCE: 'https://nuget.pkg.github.com/hotfix-houdini/index.json'
+      PACKAGE_SOURCE: 'https://api.nuget.org/v3/index.json'
