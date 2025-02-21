@@ -124,6 +124,33 @@ public class DataflowBuilderTests
                 .Build(),
             Array(["ate"])
         ).SetName("multiple select, wheres, and transforms, should all work");
+
+        yield return new TestCaseData(
+            Array(
+                Array(0, 1, 2),
+                Array(3, 4, 5)
+                ),
+            new DataflowBuilder<int[]>()
+                .SelectMany(xes => xes)
+                .Build(),
+            Array(0, 1, 2, 3, 4, 5)
+        ).SetName("Should support select manys");
+
+        yield return new TestCaseData(
+            Array(0, 1, 2, 3, 4, 5),
+            new DataflowBuilder<int>()
+                .Where(x => x % 2 == 0)                 // 0, 2, 4
+                .Select(x => new[] {x, x + 1})          // [0, 1], [2, 3], [4, 5]
+                .SelectMany(xes => xes)                 // 0, 1, 2, 3, 4, 5
+                .Select(x => $"{x}_{x}")                // "0_0", "1_1", "2_2", "3_3", "4_4", "5_5"
+                .Select(x => x.Split("_"))              // ["0", "0"], ["1", "1"], ["2", "2"], ["3", "3"], ["4", "4"], ["5", "5"]
+                .SelectMany(xes => xes)                 // "0", "0", "1", "1", "2", "2", "3", "3", "4", "4", "5", "5"
+                .Where(x => int.Parse(x) > 0)           // "1", "1", "2", "2", "3", "3", "4", "4", "5", "5"
+                .Select(x => int.Parse(x) * 2)          // 2, 2, 4, 4, 6, 6, 8, 8, 10, 10
+                .Where(x => x > 5)                      // 6, 6, 8, 8, 10, 10
+                .Build(),
+            Array(6, 6, 8, 8, 10, 10)
+        ).SetName("complicated select manys");
     }
 
     private static T[] Array<T>(params T[] elements) => elements;

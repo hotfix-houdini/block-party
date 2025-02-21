@@ -32,6 +32,13 @@ namespace BlockParty.Builder
             return new DataflowBuilder<TInput, TNewType>(_sourceBlock, newBlock);
         }
 
+        public DataflowBuilder<TInput, TNewType> SelectMany<TNewType>(Func<TOutput, TNewType[]> lambda)
+        {
+            var newBlock = new TransformManyBlock<TOutput, TNewType>(lambda);
+            AddBlock(newBlock);
+            return new DataflowBuilder<TInput, TNewType>(_sourceBlock, newBlock);
+        }
+
         public DataflowBuilder<TInput, TOutput> Where(FliterBlock<TOutput>.Predicate predicate)
         {
             var newBlock = new FliterBlock<TOutput>(predicate);
