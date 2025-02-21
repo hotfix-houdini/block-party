@@ -7,28 +7,29 @@ on:
         description: 'NuGet Package Version'
         required: true
         default: '1.0.0'
-    branches:
-      - main
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v2
-
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v1
+  ci:
+      uses: hotfix-houdini/reusable-ci-cd/.github/workflows/reusable-dotnet-ci.yml@main
+      permissions:
+        contents: read
+        packages: read
+      secrets: inherit
       with:
-        dotnet-version: '8.0'
-
-    - name: Build with dotnet
-      run: dotnet build --configuration Release
-
-    - name: Pack with dotnet
-      run: dotnet pack --configuration Release --output nupkgs /p:PackageVersion=${{ github.event.inputs.version }}
-
-    - name: Publish to NuGet
-      run: dotnet nuget push **/*.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }}
-      env:
-        NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        BRANCH: ${{ inputs.BRANCH || github.ref }}
+        SOLUTION_FILE_PATH: './BlockParty.sln'
+        DOTNET_VERISON: '8.0.x'
+  
+  cd:
+    uses: hotfix-houdini/reusable-ci-cd/.github/workflows/reusable-dotnet-cd-nuget.yml@main
+    needs: [ci]
+    permissions:
+      id-token: write 
+      contents: read
+      packages: read
+    secrets: inherit
+    with:
+      CSPROJ_PATH: 'src/BlockParty/BlockParty.csproj'
+      DOTNET_VERSION: '8.0.x'
+      NUGET_PACKAGE_VERSION: ${{ inputs.version }}
+      PACKAGE_SOURCE: 'https://api.nuget.org/v3/index.json'

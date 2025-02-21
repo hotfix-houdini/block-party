@@ -13,6 +13,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BlockParty.Tests", "tests\B
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "sln", "sln", "{70532E65-D3E1-4E7E-B5F4-4E4B9A776079}"
 	ProjectSection(SolutionItems) = preProject
+		NuGet.config = NuGet.config
 		README.md = README.md
 	EndProjectSection
 EndProject

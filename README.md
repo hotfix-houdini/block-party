@@ -1,6 +1,17 @@
 # block-party
 Extensions of the .NET TPL Dataflow Library
 
+# Builder
+`DataflowBuilder<TInput>` provides a similar API to LINQ for creating Block Flows, but "compiles" to a single TPL Dataflow block. This is useful for stream-first architecture and reduces code verbosity of using TPL Datalfow.
+
+### Methods
+- `new DataflowBuilder<TSomeType>()` which instantiates the builder wrapping a `ISourceBlock` of your desired input type.
+- `Where(n => true | false)` which wraps a `FilterBlock`.
+- `Select(x => $"y")` which wraps a `TransformBlock`.
+- `SelectMany(someEnumerable => someEnumerable)` which wraps a `TransformManyBlock`.
+- `ForEachAndComplete(x => DoSomething(x))` which acts almost like an `ActionBlock`. This builds the pipeline.
+- `Build()` which `Dataflow.Encapsulate(..)`'s the entire pipeline, giving you a single block to work with.
+
 # Blocks
 ### BeamBlock
 Inspired by Apache Beam, BeamBlock lets you group an incoming stream into time windows, and then aggregate each item within a window into an arbitrary accumulator. Downstream blocks will receive these windowed accumulators.
@@ -123,6 +134,69 @@ Output Stream:
 
 
 # Samples
+### Builder
+```csharp
+[Test]
+public async Task SimpleExample()
+{
+    // arrange
+    var intermediatePipeline = new DataflowBuilder<int>()
+        .Where(n => n % 2 == 1)  // filters stream to odd numbers
+        .Select(n => $"{n + 1}") // maps odd numbers to the next even number as strings
+        .Build();                // generates an IPropagatorBlock for use
+
+    // act
+    for (int i = 1; i <= 4; i++)
+    {
+        intermediatePipeline.Post(i);
+    }
+    intermediatePipeline.Complete();
+
+    var results = new List<string>();
+    var downstreamBlock = new ActionBlock<string>(s => results.Add(s));
+    intermediatePipeline.LinkTo(downstreamBlock, new DataflowLinkOptions() { PropagateCompletion = true });
+    await downstreamBlock.Completion;
+
+    // assert
+    /* flow:
+        *  in: 1, 2, 3, 4
+        *  => 1, 3
+        *  => "2", "4"
+        */
+    Assert.That(results, Is.EqualTo(new string[] { "2", "4" }).AsCollection);
+}
+
+[Test]
+public async Task SimpleForeachExample()
+{
+    // arrange
+    var sum = 0.0;
+    var endingPipeline = new DataflowBuilder<int[]>()
+        .SelectMany(numbers => numbers)     // flatten array
+        .Where(n => n % 2 == 0)             // filters stream to even numbers
+        .Select(n => n + 0.5)               // maps even numbers to the next odd number as strings
+        .ForEachAndComplete(n => sum += n); // add the strings to an array. Also Builds which is forced as the final block.
+
+    // act
+    for (int i = 1; i <= 4; i++)
+    {
+        endingPipeline.Post([i, i + 1]);
+    }
+    endingPipeline.Complete();
+    await endingPipeline.Completion; // no need (or option) to link to this pipeline downstream.
+
+    // assert
+    /* flow:
+        *  in: [1,2], [2,3], [3,4], [4,5]
+        *  => 1, 2, 2, 3, 3, 4, 4, 5
+        *  => 2, 2, 4, 4
+        *  => 2.5, 2.5, 4.5, 4.5
+        *  => 14
+        */
+    Assert.That(sum, Is.EqualTo(14.0));
+}
+```
+
 ### BeamBlock
 ```csharp
 public class TestModelWithDateTimeOffsetTime
