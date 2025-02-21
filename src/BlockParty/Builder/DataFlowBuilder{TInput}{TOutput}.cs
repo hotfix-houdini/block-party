@@ -46,6 +46,17 @@ namespace BlockParty.Builder
             return this;
         }
 
+        public DataflowBuilder<TInput, DoneResult> ForEach(Action<TOutput> lambda)
+        {
+            var newBlock = new TransformBlock<TOutput, DoneResult>(input =>
+            {
+                lambda(input);
+                return DoneResult.Instance;
+                });
+            AddBlock(newBlock);
+            return new DataflowBuilder<TInput, DoneResult>(_sourceBlock, newBlock);
+        }
+
         public IPropagatorBlock<TInput, TOutput> Build()
         {
             return DataflowBlock.Encapsulate(_sourceBlock, _lastBlock);

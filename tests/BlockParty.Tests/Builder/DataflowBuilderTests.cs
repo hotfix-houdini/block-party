@@ -22,6 +22,28 @@ public class DataflowBuilderTests
         CollectionAssert.AreEqual(expectedOutput, results);
     }
 
+    [Test]
+    public async Task ForEach_ShouldExecuteForEachItem()
+    {
+        // arrange
+        var data = CompletedBufferBlockFromList(Array(1, 2, 3));
+
+        var actualActedOnItems = new List<int>();
+        var pipeline = new DataflowBuilder<int>()
+            .ForEach(i => actualActedOnItems.Add(i))
+            .Build();
+
+        // act
+        data.LinkTo(pipeline, new DataflowLinkOptions() { PropagateCompletion = true });
+        var results = await ReadAllAsync(pipeline);
+
+        // assert
+        var expectedResults = new DoneResult[] { DoneResult.Instance, DoneResult.Instance, DoneResult.Instance };
+        var expectedActedOnItems = new List<int>() { 1, 2, 3 };
+        CollectionAssert.AreEqual(expectedResults, results);
+        CollectionAssert.AreEqual(expectedActedOnItems, actualActedOnItems);
+    }
+
     private static IEnumerable<TestCaseData> DataPipelineShouldFlowTestCases()
     {
         yield return new TestCaseData(
