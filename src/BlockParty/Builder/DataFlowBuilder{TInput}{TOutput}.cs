@@ -47,7 +47,7 @@ namespace BlockParty.Builder
             return this;
         }
 
-        public DataflowBuilder<TInput, DoneResult> ForEach(Action<TOutput> lambda)
+        public IPropagatorBlock<TInput, DoneResult> ForEachAndComplete(Action<TOutput> lambda)
         {
             var newBlock = new TransformBlock<TOutput, DoneResult>(input =>
             {
@@ -55,10 +55,11 @@ namespace BlockParty.Builder
                 return DoneResult.Instance;
             });
             AddBlock(newBlock);
-            return new DataflowBuilder<TInput, DoneResult>(_sourceBlock, newBlock);
+            newBlock.LinkTo(DataflowBlock.NullTarget<DoneResult>());
+            return new DataflowBuilder<TInput, DoneResult>(_sourceBlock, newBlock).Build();
         }
 
-        public DataflowBuilder<TInput, DoneResult> ForEach(Func<TOutput, Task> lambda)
+        public IPropagatorBlock<TInput, DoneResult> ForEachAndComplete(Func<TOutput, Task> lambda)
         {
             var newBlock = new TransformBlock<TOutput, DoneResult>(async input =>
             {
@@ -66,7 +67,8 @@ namespace BlockParty.Builder
                 return DoneResult.Instance;
             });
             AddBlock(newBlock);
-            return new DataflowBuilder<TInput, DoneResult>(_sourceBlock, newBlock);
+            newBlock.LinkTo(DataflowBlock.NullTarget<DoneResult>());
+            return new DataflowBuilder<TInput, DoneResult>(_sourceBlock, newBlock).Build();
         }
 
         public IPropagatorBlock<TInput, TOutput> Build()

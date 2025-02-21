@@ -30,18 +30,75 @@ public class DataflowBuilderTests
 
         var actualActedOnItems = new List<int>();
         var pipeline = new DataflowBuilder<int>()
-            .ForEach(i => actualActedOnItems.Add(i))
-            .Build();
+            .ForEachAndComplete(i => actualActedOnItems.Add(i));
 
         // act
         data.LinkTo(pipeline, new DataflowLinkOptions() { PropagateCompletion = true });
-        var results = await ReadAllAsync(pipeline);
+        await pipeline.Completion; // completed data buffer propagated already; no need to explicity complete pipeline
 
         // assert
-        var expectedResults = new DoneResult[] { DoneResult.Instance, DoneResult.Instance, DoneResult.Instance };
         var expectedActedOnItems = new List<int>() { 1, 2, 3 };
-        CollectionAssert.AreEqual(expectedResults, results);
         CollectionAssert.AreEqual(expectedActedOnItems, actualActedOnItems);
+    }
+
+    [Test]
+    public async Task SimpleExample()
+    {
+        // arrange
+        var intermediatePipeline = new DataflowBuilder<int>()
+            .Where(n => n % 2 == 1)  // filters stream to odd numbers
+            .Select(n => $"{n + 1}") // maps odd numbers to the next even number as strings
+            .Build();                // generates an IPropagatorBlock for use
+
+        // act
+        for (int i = 1; i <= 4; i++)
+        {
+            intermediatePipeline.Post(i);
+        }
+        intermediatePipeline.Complete();
+
+        var results = new List<string>();
+        var downstreamBlock = new ActionBlock<string>(s => results.Add(s));
+        intermediatePipeline.LinkTo(downstreamBlock, new DataflowLinkOptions() { PropagateCompletion = true });
+        await downstreamBlock.Completion;
+
+        // assert
+        /* flow:
+         *  in: 1, 2, 3, 4
+         *  => 1, 3
+         *  => "2", "4"
+         */
+        Assert.That(results, Is.EqualTo(new string[] { "2", "4" }).AsCollection);
+    }
+
+    [Test]
+    public async Task SimpleForeachExample()
+    {
+        // arrange
+        var sum = 0.0;
+        var endingPipeline = new DataflowBuilder<int[]>()
+            .SelectMany(numbers => numbers)     // flatten array
+            .Where(n => n % 2 == 0)             // filters stream to even numbers
+            .Select(n => n + 0.5)               // maps even numbers to the next odd number as strings
+            .ForEachAndComplete(n => sum += n); // add the strings to an array. Also Builds which is forced as the final block.
+
+        // act
+        for (int i = 1; i <= 4; i++)
+        {
+            endingPipeline.Post([i, i + 1]);
+        }
+        endingPipeline.Complete();
+        await endingPipeline.Completion; // no need (or option) to link to this pipeline downstream.// no need (or option) to link to this pipeline downstream.
+
+        // assert
+        /* flow:
+         *  in: [1,2], [2,3], [3,4], [4,5]
+         *  => 1, 2, 2, 3, 3, 4, 4, 5
+         *  => 2, 2, 4, 4
+         *  => 2.5, 2.5, 4.5, 4.5
+         *  => 14
+         */
+        Assert.That(sum, Is.EqualTo(14.0));
     }
 
     private static IEnumerable<TestCaseData> DataPipelineShouldFlowTestCases()
@@ -93,7 +150,7 @@ public class DataflowBuilderTests
                 .Where(x => x % 2 == 1) // 1, 3, 5
                 .Select(x => x + 1)     // 2, 4, 6
                 .Where(x => x < 6)      // 2, 4
-                .Select(x => x - 2)     // 0, 2,
+                .Select(x => x - 2)     // 0, 2
                 .Build(),
             Array([0, 2])
         ).SetName("select and wheres should be interchangeable");
@@ -178,9 +235,8 @@ public class DataflowBuilderTests
         yield return new TestCaseData(
             Array([0, 1, 2]),
             new DataflowBuilder<int>()
-                .ForEach(async doneResult => await Task.Delay(100))
-                .Build(),
-            Array([DoneResult.Instance, DoneResult.Instance, DoneResult.Instance])
+                .ForEachAndComplete(async doneResult => await Task.Delay(100)),
+            new DoneResult[] { } // gets consumed by null pointer
         ).SetName("should be able to do async/await for each");
     }
 
