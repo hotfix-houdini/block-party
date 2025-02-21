@@ -6,24 +6,20 @@ on:
   pull_request:
     branches: [ main ]
   workflow_dispatch:
-
+    inputs:
+        BRANCH:
+          description: 'Branch of source code'
+          required: true
+          default: 'main'
+    
 jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v2
-
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v1
-      with:
-        dotnet-version: '8.0'
-
-    - name: Install dependencies
-      run: dotnet restore
-
-    - name: Build
-      run: dotnet build --configuration Release --no-restore
-
-    - name: Test
-      run: dotnet test --no-restore --verbosity normal
+  ci:
+    uses: hotfix-houdini/reusable-ci-cd/.github/workflows/reusable-dotnet-ci.yml@main
+    permissions:
+      contents: read
+      packages: read
+    secrets: inherit
+    with:
+      BRANCH: ${{ inputs.BRANCH || github.ref }}
+      SOLUTION_FILE_PATH: './BlockParty.sln'
+      DOTNET_VERISON: '8.0.x'
