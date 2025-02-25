@@ -1,4 +1,5 @@
-﻿using BlockParty.Blocks.Filter;
+﻿using BlockParty.Blocks.Beam;
+using BlockParty.Blocks.Filter;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -70,6 +71,17 @@ namespace BlockParty.Builder
             AddBlock(newBlock);
             newBlock.LinkTo(DataflowBlock.NullTarget<DoneResult>());
             return new DataflowBuilder<TInput, DoneResult>(_sourceBlock, newBlock).Build();
+        }
+
+        public DataflowBuilder<TInput, TAccumulator> Beam<TAccumulator>(
+            TimeSpan window,
+            Action<TOutput, TAccumulator> accumlateMethod,
+            Func<TOutput, NanosecondTimeConverter, long> timeSelectionMethod,
+            BeamBlockSettings settings = null) where TAccumulator : class, IAccumulator, new()
+        {
+            var newBlock = new BeamBlock<TOutput, TAccumulator>(window, accumlateMethod, timeSelectionMethod, settings);
+            AddBlock(newBlock);
+            return new DataflowBuilder<TInput, TAccumulator>(_sourceBlock, newBlock);
         }
 
         public IPropagatorBlock<TInput, TOutput> Build()

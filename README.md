@@ -10,6 +10,7 @@ Extensions of the .NET TPL Dataflow Library
 - `Select(x => $"y")` which wraps a `TransformBlock`.
 - `SelectMany(someEnumerable => someEnumerable)` which wraps a `TransformManyBlock`.
 - `ForEachAndComplete(x => DoSomething(x))` which acts almost like an `ActionBlock`. This builds the pipeline.
+- `Beam(...)` which wraps the `BeamBlock`.
 - `Build()` which `Dataflow.Encapsulate(..)`'s the entire pipeline, giving you a single block to work with.
 
 # Blocks
