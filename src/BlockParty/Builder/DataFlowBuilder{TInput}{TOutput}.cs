@@ -1,5 +1,6 @@
 ﻿using BlockParty.Blocks.Filter;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
@@ -33,7 +34,7 @@ namespace BlockParty.Builder
             return new DataflowBuilder<TInput, TNewType>(_sourceBlock, newBlock);
         }
 
-        public DataflowBuilder<TInput, TNewType> SelectMany<TNewType>(Func<TOutput, TNewType[]> lambda)
+        public DataflowBuilder<TInput, TNewType> SelectMany<TNewType>(Func<TOutput, IEnumerable<TNewType>> lambda)
         {
             var newBlock = new TransformManyBlock<TOutput, TNewType>(lambda);
             AddBlock(newBlock);
