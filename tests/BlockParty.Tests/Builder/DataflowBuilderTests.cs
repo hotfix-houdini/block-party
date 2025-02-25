@@ -1,4 +1,5 @@
 ﻿using BlockParty.Builder;
+using BlockParty.Tests.Blocks;
 using System.Threading.Tasks.Dataflow;
 
 namespace BlockParty.Tests.Builder;
@@ -238,6 +239,22 @@ public class DataflowBuilderTests
                 .ForEachAndComplete(async doneResult => await Task.Delay(100)),
             new DoneResult[] { } // gets consumed by null pointer
         ).SetName("should be able to do async/await for each");
+
+
+        yield return new TestCaseData(
+            Array(0, 1, 2, 3),
+            new DataflowBuilder<int>()
+                .Select(i => (time: i, value: i * 2))
+                .Beam<TestAccumulator>(
+                    window: TimeSpan.FromSeconds(2),
+                    (stream, acc) => acc.Value += stream.value,
+                    (stream, _) => stream.time * 1_000_000_000)
+                .Select(acc => (start: acc.WindowStart, end: acc.WindowEnd, value: acc.Value))
+                .Build(),
+            Array<(long, long, int)>(
+                new Window(start: 0_000000000, end: 2_000000000, value: 2 * (0 + 1)),
+                new Window(start: 2_000000000, end: 4_000000000, value: 2 * (2 + 3)))
+        ).SetName("should be able to beam");
     }
 
     private static T[] Array<T>(params T[] elements) => elements;
@@ -268,5 +285,19 @@ public class DataflowBuilderTests
 
         await block.Completion;
         return results;
+    }
+}
+
+// just to avoid a silly struct-compiler warning
+internal record struct Window(long start, long end, int value)
+{
+    public static implicit operator (long start, long end, int value)(Window value)
+    {
+        return (value.start, value.end, value.value);
+    }
+
+    public static implicit operator Window((long start, long end, int value) value)
+    {
+        return new Window(value.start, value.end, value.value);
     }
 }
