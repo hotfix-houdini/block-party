@@ -9,7 +9,7 @@ Extensions of the .NET TPL Dataflow Library
 - `Filter(n => true | false)` which wraps a `FilterBlock`.
 - `Transform(x => $"y")` which wraps a `TransformBlock`.
 - `TransformMany(someEnumerable => someEnumerable)` which wraps a `TransformManyBlock`.
-- `ForEachAndComplete(x => DoSomething(x))` which acts almost like an `ActionBlock`. This builds the pipeline.
+- `Action(x => DoSomething(x))` which acts almost like an `ActionBlock`. This builds the pipeline.
 - `Beam(...)` which wraps the `BeamBlock`.
 - `Build()` which `Dataflow.Encapsulate(..)`'s the entire pipeline, giving you a single block to work with.
 
@@ -142,9 +142,9 @@ public async Task SimpleExample()
 {
     // arrange
     var intermediatePipeline = new DataflowBuilder<int>()
-        .Filter(n => n % 2 == 1)  // filters stream to odd numbers
+        .Filter(n => n % 2 == 1)    // filters stream to odd numbers
         .Transform(n => $"{n + 1}") // maps odd numbers to the next even number as strings
-        .Build();                // generates an IPropagatorBlock for use
+        .Build();                   // generates an IPropagatorBlock for use
 
     // act
     for (int i = 1; i <= 4; i++)
@@ -168,15 +168,16 @@ public async Task SimpleExample()
 }
 
 [Test]
-public async Task SimpleForeachExample()
+public async Task SimpleActionExample()
 {
     // arrange
     var sum = 0.0;
     var endingPipeline = new DataflowBuilder<int[]>()
-        .TransformMany(numbers => numbers)     // flatten array
-        .Filter(n => n % 2 == 0)             // filters stream to even numbers
-        .Transform(n => n + 0.5)               // maps even numbers to the next odd number as strings
-        .ForEachAndComplete(n => sum += n); // add the strings to an array. Also Builds which is forced as the final block.
+        .TransformMany(numbers => numbers) // flatten array
+        .Filter(n => n % 2 == 0)           // filters stream to even numbers
+        .Transform(n => n + 0.5)           // maps even numbers to the next odd number as strings
+        .Action(n => sum += n)             // add the strings to an arra
+        .Build();
 
     // act
     for (int i = 1; i <= 4; i++)
@@ -184,7 +185,7 @@ public async Task SimpleForeachExample()
         endingPipeline.Post([i, i + 1]);
     }
     endingPipeline.Complete();
-    await endingPipeline.Completion; // no need (or option) to link to this pipeline downstream.
+    await endingPipeline.Completion; // no need (or option) to link to this pipeline downstream.// no need (or option) to link to this pipeline downstream.
 
     // assert
     /* flow:

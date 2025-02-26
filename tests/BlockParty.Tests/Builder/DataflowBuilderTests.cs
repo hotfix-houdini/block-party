@@ -24,14 +24,15 @@ public class DataflowBuilderTests
     }
 
     [Test]
-    public async Task ForEach_ShouldExecuteForEachItem()
+    public async Task Action_ShouldExecuteForEachItem_AndComplete()
     {
         // arrange
         var data = CompletedBufferBlockFromList(Array(1, 2, 3));
 
         var actualActedOnItems = new List<int>();
         var pipeline = new DataflowBuilder<int>()
-            .ForEachAndComplete(i => actualActedOnItems.Add(i));
+            .Action(i => actualActedOnItems.Add(i))
+            .Build();
 
         // act
         data.LinkTo(pipeline, new DataflowLinkOptions() { PropagateCompletion = true });
@@ -47,9 +48,9 @@ public class DataflowBuilderTests
     {
         // arrange
         var intermediatePipeline = new DataflowBuilder<int>()
-            .Filter(n => n % 2 == 1)  // filters stream to odd numbers
+            .Filter(n => n % 2 == 1)    // filters stream to odd numbers
             .Transform(n => $"{n + 1}") // maps odd numbers to the next even number as strings
-            .Build();                // generates an IPropagatorBlock for use
+            .Build();                   // generates an IPropagatorBlock for use
 
         // act
         for (int i = 1; i <= 4; i++)
@@ -73,15 +74,16 @@ public class DataflowBuilderTests
     }
 
     [Test]
-    public async Task SimpleForeachExample()
+    public async Task SimpleActionExample()
     {
         // arrange
         var sum = 0.0;
         var endingPipeline = new DataflowBuilder<int[]>()
-            .TransformMany(numbers => numbers)     // flatten array
-            .Filter(n => n % 2 == 0)             // filters stream to even numbers
-            .Transform(n => n + 0.5)               // maps even numbers to the next odd number as strings
-            .ForEachAndComplete(n => sum += n); // add the strings to an array. Also Builds which is forced as the final block.
+            .TransformMany(numbers => numbers) // flatten array
+            .Filter(n => n % 2 == 0)           // filters stream to even numbers
+            .Transform(n => n + 0.5)           // maps even numbers to the next odd number as strings
+            .Action(n => sum += n)             // add the strings to an arra
+            .Build();
 
         // act
         for (int i = 1; i <= 4; i++)
@@ -236,10 +238,10 @@ public class DataflowBuilderTests
         yield return new TestCaseData(
             Array([0, 1, 2]),
             new DataflowBuilder<int>()
-                .ForEachAndComplete(async doneResult => await Task.Delay(100)),
-            new DoneResult[] { } // gets consumed by null pointer
+                .Action(async doneResult => await Task.Delay(100))
+                .Build(),
+            new DoneResult[] { } // gets consumed by null pointer (unless linked with a prepend!)
         ).SetName("should be able to do async/await for each");
-
 
         yield return new TestCaseData(
             Array(0, 1, 2, 3),
