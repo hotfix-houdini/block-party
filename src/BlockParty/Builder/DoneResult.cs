@@ -1,7 +1,6 @@
-﻿namespace BlockParty.Builder
+﻿namespace BlockParty.Builder;
+
+public readonly struct DoneResult
 {
-    public readonly struct DoneResult
-    {
-        public static readonly DoneResult Instance = new DoneResult();
-    }
+    public static readonly DoneResult Instance = new();
 }

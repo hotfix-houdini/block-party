@@ -1,8 +1,7 @@
-﻿namespace BlockParty.Blocks.Beam
+﻿namespace BlockParty.Blocks.Beam;
+
+public interface IAccumulator
 {
-    public interface IAccumulator
-    {
-        long WindowStart { get; set; }
-        long WindowEnd { get; set; }
-    }
+    long WindowStart { get; set; }
+    long WindowEnd { get; set; }
 }

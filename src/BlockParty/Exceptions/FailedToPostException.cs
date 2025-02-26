@@ -1,8 +1,7 @@
 ﻿using System;
 
-namespace BlockParty.Exceptions
+namespace BlockParty.Exceptions;
+
+public class FailedToPostException : Exception
 {
-    public class FailedToPostException : Exception
-    {
-    }
 }
