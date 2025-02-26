@@ -20,7 +20,7 @@ jobs:
     with:
       SOLUTION_FILE_PATH: './BlockParty.sln'
       CSPROJ_PATH: 'src/BlockParty/BlockParty.csproj'
-      DOTNET_VERSION: '8.0.x'
+      DOTNET_VERSION: '9.x'
       NUGET_PACKAGE_VERSION: ${{ inputs.version }}
       PACKAGE_SOURCE: 'https://api.nuget.org/v3/index.json'
       RELEASE_NOTES_PATH: './latest-release-notes.md'
