@@ -14,7 +14,7 @@ on:
     
 jobs:
   ci:
-    uses: hotfix-houdini/reusable-ci-cd/.github/workflows/reusable-dotnet-ci.yml@main
+    uses: hotfix-houdini/reusable-ci-cd/.github/workflows/reusable-dotnet-ci.yml@v1
     permissions:
       contents: read
       packages: read
