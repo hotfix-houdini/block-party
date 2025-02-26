@@ -176,7 +176,7 @@ public async Task SimpleActionExample()
         .TransformMany(numbers => numbers) // flatten array
         .Filter(n => n % 2 == 0)           // filters stream to even numbers
         .Transform(n => n + 0.5)           // maps even numbers to the next odd number as strings
-        .Action(n => sum += n)             // add the strings to an arra
+        .Action(n => sum += n)             // add the strings to an array
         .Build();
 
     // act
