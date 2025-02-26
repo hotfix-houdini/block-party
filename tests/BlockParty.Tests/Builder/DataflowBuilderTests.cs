@@ -257,6 +257,30 @@ public class DataflowBuilderTests
                 new Window(start: 0_000000000, end: 2_000000000, value: 2 * (0 + 1)),
                 new Window(start: 2_000000000, end: 4_000000000, value: 2 * (2 + 3)))
         ).SetName("should be able to beam");
+
+        yield return new TestCaseData(
+            Array(0, 1, 2, 3, 4),
+            new DataflowBuilder<int>()
+                .Batch(2)
+                .Build(),
+            Array<int[]>([0, 1], [2, 3], [4])
+        ).SetName("batch should work with divisible amount");
+
+        yield return new TestCaseData(
+            Array(0, 1, 2, 3, 4, 5),
+            new DataflowBuilder<int>()
+                .Batch(2)
+                .Build(),
+            Array<int[]>([0, 1], [2, 3], [4, 5])
+        ).SetName("batch should work with remainder amount");
+
+        yield return new TestCaseData(
+            Array(0),
+            new DataflowBuilder<int>()
+                .Batch(2)
+                .Build(),
+            Array<int[]>([0])
+        ).SetName("batch should work with less than batch amount streamed");
     }
 
     private static T[] Array<T>(params T[] elements) => elements;
