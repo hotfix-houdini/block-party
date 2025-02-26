@@ -56,7 +56,7 @@ public class SequencePreservingBlockTests
         await actualCollectorBlock.Completion;
 
         // assert
-        CollectionAssert.AreEqual(expectedOutput, actualItems);
+        Assert.That(actualItems, Is.EqualTo(expectedOutput).AsCollection);
     }
 
     [Test]
@@ -82,6 +82,6 @@ public class SequencePreservingBlockTests
         await collectorBlock.Completion;
 
         // assert
-        CollectionAssert.AreEqual(new string[] { "1", "2", "3" }, actualItems);
+        Assert.That(actualItems, Is.EqualTo(["1", "2", "3"]).AsCollection);
     }
 }

@@ -20,7 +20,7 @@ public class DataflowBuilderTests
         var results = await ReadAllAsync(builtPipeline);
 
         // assert
-        CollectionAssert.AreEqual(expectedOutput, results);
+        Assert.That(results, Is.EqualTo(expectedOutput).AsCollection);
     }
 
     [Test]
@@ -40,7 +40,7 @@ public class DataflowBuilderTests
 
         // assert
         var expectedActedOnItems = new List<int>() { 1, 2, 3 };
-        CollectionAssert.AreEqual(expectedActedOnItems, actualActedOnItems);
+        Assert.That(actualActedOnItems, Is.EqualTo(expectedActedOnItems).AsCollection);
     }
 
     [Test]

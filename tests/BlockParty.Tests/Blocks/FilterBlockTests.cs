@@ -31,7 +31,7 @@ public class FilterBlockTests
         await outputCollector.Completion;
 
         // assert
-        CollectionAssert.AreEqual(expectedOutputs, actualOutputs);
+        Assert.That(actualOutputs, Is.EqualTo(expectedOutputs).AsCollection);
     }
 
     [Test]
@@ -53,6 +53,6 @@ public class FilterBlockTests
         await outputCollector.Completion;
 
         // assert
-        CollectionAssert.AreEqual(new List<int>() { 0, 2, 4, 6, 8}, actualOutputs);
+        Assert.That(actualOutputs, Is.EqualTo([0, 2, 4, 6, 8]).AsCollection);
     }
 }

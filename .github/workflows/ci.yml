@@ -22,4 +22,4 @@ jobs:
     with:
       BRANCH: ${{ inputs.BRANCH || github.ref }}
       SOLUTION_FILE_PATH: './BlockParty.sln'
-      DOTNET_VERISON: '8.0.x'
+      DOTNET_VERISON: '9.x'
