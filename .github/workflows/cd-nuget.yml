@@ -11,7 +11,7 @@ on:
 
 jobs:
   cd:
-    uses: hotfix-houdini/reusable-ci-cd/.github/workflows/reusable-dotnet-cd-nuget.yml@v1
+    uses: hotfix-houdini/reusable-ci-cd/.github/workflows/reusable-dotnet-cd-nuget.yml@main
     permissions:
       id-token: write 
       contents: write
