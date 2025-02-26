@@ -15,7 +15,7 @@ public class FilterBlockTests
         // arrange
         var inputs = inputStream.Split(", ").Select(x => int.Parse(x)).ToList();
         var expectedOutputs = expectedOutputStream.Split(", ").Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => int.Parse(x)).ToList();
-        var filterBlock = new FliterBlock<int>(x => x > lowerBound);
+        var filterBlock = new FilterBlock<int>(x => x > lowerBound);
 
         var actualOutputs = new List<int>();
         var outputCollector = new ActionBlock<int>(x => actualOutputs.Add(x));
@@ -38,7 +38,7 @@ public class FilterBlockTests
     public async Task ShouldFilterSimple()
     {
         // arrange
-        var filterBlock = new FliterBlock<int>(x => x % 2 == 0); // even #'s only
+        var filterBlock = new FilterBlock<int>(x => x % 2 == 0); // even #'s only
 
         var actualOutputs = new List<int>();
         var outputCollector = new ActionBlock<int>(x => actualOutputs.Add(x));

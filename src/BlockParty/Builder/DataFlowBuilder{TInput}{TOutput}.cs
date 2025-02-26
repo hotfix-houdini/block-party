@@ -28,23 +28,23 @@ namespace BlockParty.Builder
             _lastBlock = currentBlock;
         }
 
-        public DataflowBuilder<TInput, TNewType> Select<TNewType>(Func<TOutput, TNewType> lambda)
+        public DataflowBuilder<TInput, TNewType> Transform<TNewType>(Func<TOutput, TNewType> lambda)
         {
             var newBlock = new TransformBlock<TOutput, TNewType>(lambda);
             AddBlock(newBlock);
             return new DataflowBuilder<TInput, TNewType>(_sourceBlock, newBlock);
         }
 
-        public DataflowBuilder<TInput, TNewType> SelectMany<TNewType>(Func<TOutput, IEnumerable<TNewType>> lambda)
+        public DataflowBuilder<TInput, TNewType> TransformMany<TNewType>(Func<TOutput, IEnumerable<TNewType>> lambda)
         {
             var newBlock = new TransformManyBlock<TOutput, TNewType>(lambda);
             AddBlock(newBlock);
             return new DataflowBuilder<TInput, TNewType>(_sourceBlock, newBlock);
         }
 
-        public DataflowBuilder<TInput, TOutput> Where(FliterBlock<TOutput>.Predicate predicate)
+        public DataflowBuilder<TInput, TOutput> Filter(FilterBlock<TOutput>.Predicate predicate)
         {
-            var newBlock = new FliterBlock<TOutput>(predicate);
+            var newBlock = new FilterBlock<TOutput>(predicate);
             AddBlock(newBlock);
             return this;
         }
