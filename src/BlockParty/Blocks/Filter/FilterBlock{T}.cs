@@ -7,13 +7,13 @@ using System.Threading.Tasks.Dataflow;
 namespace BlockParty.Blocks.Filter
 {
     /// <summary>
-    /// FliterBlock allows you to filter down a stream by any lambda method.<br/>
+    /// FilterBlock allows you to filter down a stream by any lambda method.<br/>
     /// 
     /// <param name="predicate">The lambda used to gatekeep the downstream.</param><br/><br/>
     /// 
     /// See <a href="https://github.com/hotfix-houdini/block-party">GitHub</a> for more details.
     /// </summary>
-    public class FliterBlock<T> : IPropagatorBlock<T, T>, IReceivableSourceBlock<T>
+    public class FilterBlock<T> : IPropagatorBlock<T, T>, IReceivableSourceBlock<T>
     {
         public delegate bool Predicate(T item);
 
@@ -21,13 +21,13 @@ namespace BlockParty.Blocks.Filter
         private readonly IReceivableSourceBlock<T> m_source;
 
         /// <summary>
-        /// FliterBlock allows you to filter down a stream by any lambda method.<br/>
+        /// FilterBlock allows you to filter down a stream by any lambda method.<br/>
         /// 
         /// <param name="predicate">The lambda used to gatekeep the downstream.</param><br/><br/>
         /// 
         /// See <a href="https://github.com/hotfix-houdini/block-party">GitHub</a> for more details.
         /// </summary>
-        public FliterBlock(Predicate predicate)
+        public FilterBlock(Predicate predicate)
         {
             var source = new BufferBlock<T>();
             var target = new ActionBlock<T>(item =>

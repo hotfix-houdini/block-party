@@ -28,28 +28,34 @@ namespace BlockParty.Builder
             _lastBlock = currentBlock;
         }
 
-        public DataflowBuilder<TInput, TNewType> Select<TNewType>(Func<TOutput, TNewType> lambda)
+        public DataflowBuilder<TInput, TNewType> Transform<TNewType>(Func<TOutput, TNewType> lambda)
         {
             var newBlock = new TransformBlock<TOutput, TNewType>(lambda);
             AddBlock(newBlock);
             return new DataflowBuilder<TInput, TNewType>(_sourceBlock, newBlock);
         }
 
-        public DataflowBuilder<TInput, TNewType> SelectMany<TNewType>(Func<TOutput, IEnumerable<TNewType>> lambda)
+        public DataflowBuilder<TInput, TNewType> TransformMany<TNewType>(Func<TOutput, IEnumerable<TNewType>> lambda)
         {
             var newBlock = new TransformManyBlock<TOutput, TNewType>(lambda);
             AddBlock(newBlock);
             return new DataflowBuilder<TInput, TNewType>(_sourceBlock, newBlock);
         }
 
-        public DataflowBuilder<TInput, TOutput> Where(FliterBlock<TOutput>.Predicate predicate)
+        public DataflowBuilder<TInput, TOutput> Filter(FilterBlock<TOutput>.Predicate predicate)
         {
-            var newBlock = new FliterBlock<TOutput>(predicate);
+            var newBlock = new FilterBlock<TOutput>(predicate);
             AddBlock(newBlock);
             return this;
         }
 
-        public IPropagatorBlock<TInput, DoneResult> ForEachAndComplete(Action<TOutput> lambda)
+        /// <summary>
+        /// Note: This actually creates a TransformBlock instead of an Action block, where the output is a "DoneResult" object.
+        /// The intention is not to link downstream of this; it was done this way to maintain the IPropagator interface.
+        /// Additionally, if the last block in the pipeline outputs to DoneResult, then it will automatically be linked to the NullTarget block so it will process messages and complete automatically.
+        /// If for SOME reason you build a pipeline and end it with Action, AND want to link downstream of it (just receiving DoneResults), then you want to link to with the PREPEND instead of APPEND option.
+        /// </summary>
+        public DataflowBuilder<TInput, DoneResult> Action(Action<TOutput> lambda)
         {
             var newBlock = new TransformBlock<TOutput, DoneResult>(input =>
             {
@@ -57,11 +63,16 @@ namespace BlockParty.Builder
                 return DoneResult.Instance;
             });
             AddBlock(newBlock);
-            newBlock.LinkTo(DataflowBlock.NullTarget<DoneResult>());
-            return new DataflowBuilder<TInput, DoneResult>(_sourceBlock, newBlock).Build();
+            return new DataflowBuilder<TInput, DoneResult>(_sourceBlock, newBlock);
         }
 
-        public IPropagatorBlock<TInput, DoneResult> ForEachAndComplete(Func<TOutput, Task> lambda)
+        /// <summary>
+        /// Note: This actually creates a TransformBlock instead of an Action block, where the output is a "DoneResult" object.
+        /// The intention is not to link downstream of this; it was done this way to maintain the IPropagator interface.
+        /// Additionally, if the last block in the pipeline outputs to DoneResult, then it will automatically be linked to the NullTarget block so it will process messages and complete automatically.
+        /// If for SOME reason you build a pipeline and end it with Action, AND want to link downstream of it (just receiving DoneResults), then you want to link to with the PREPEND instead of APPEND option.
+        /// </summary>
+        public DataflowBuilder<TInput, DoneResult> Action(Func<TOutput, Task> lambda)
         {
             var newBlock = new TransformBlock<TOutput, DoneResult>(async input =>
             {
@@ -69,8 +80,7 @@ namespace BlockParty.Builder
                 return DoneResult.Instance;
             });
             AddBlock(newBlock);
-            newBlock.LinkTo(DataflowBlock.NullTarget<DoneResult>());
-            return new DataflowBuilder<TInput, DoneResult>(_sourceBlock, newBlock).Build();
+            return new DataflowBuilder<TInput, DoneResult>(_sourceBlock, newBlock);
         }
 
         public DataflowBuilder<TInput, TAccumulator> Beam<TAccumulator>(
@@ -86,6 +96,11 @@ namespace BlockParty.Builder
 
         public IPropagatorBlock<TInput, TOutput> Build()
         {
+            if (typeof(TOutput) == typeof(DoneResult))
+            {
+                _lastBlock.LinkTo(DataflowBlock.NullTarget<TOutput>());
+            }
+
             return DataflowBlock.Encapsulate(_sourceBlock, _lastBlock);
         }
 

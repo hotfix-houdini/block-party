@@ -10,27 +10,17 @@ on:
         default: '1.0.0'
 
 jobs:
-  ci:
-      uses: hotfix-houdini/reusable-ci-cd/.github/workflows/reusable-dotnet-ci.yml@main
-      permissions:
-        contents: read
-        packages: read
-      secrets: inherit
-      with:
-        BRANCH: ${{ inputs.BRANCH || github.ref }}
-        SOLUTION_FILE_PATH: './BlockParty.sln'
-        DOTNET_VERISON: '8.0.x'
-  
   cd:
-    uses: hotfix-houdini/reusable-ci-cd/.github/workflows/reusable-dotnet-cd-nuget.yml@main
-    needs: [ci]
+    uses: hotfix-houdini/reusable-ci-cd/.github/workflows/reusable-dotnet-cd-nuget.yml@v1
     permissions:
       id-token: write 
-      contents: read
+      contents: write
       packages: read
     secrets: inherit
     with:
+      SOLUTION_FILE_PATH: './BlockParty.sln'
       CSPROJ_PATH: 'src/BlockParty/BlockParty.csproj'
       DOTNET_VERSION: '8.0.x'
       NUGET_PACKAGE_VERSION: ${{ inputs.version }}
       PACKAGE_SOURCE: 'https://api.nuget.org/v3/index.json'
+      RELEASE_NOTES_PATH: './latest-release-notes.md'
