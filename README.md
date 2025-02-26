@@ -1,5 +1,5 @@
 # block-party
-Extensions of the .NET TPL Dataflow Library
+Extensions of the .NET TPL Dataflow Library. This package exposes several unique blocks as well as a Builder framework to reduce dataflow verbosity.
 
 # Builder
 `DataflowBuilder<TInput>` provides a similar API to LINQ for creating Block Flows, but "compiles" to a single TPL Dataflow block. This is useful for stream-first architecture and reduces code verbosity of using TPL Datalfow.
