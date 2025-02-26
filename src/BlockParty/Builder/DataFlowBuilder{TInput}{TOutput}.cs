@@ -94,6 +94,13 @@ public class DataflowBuilder<TInput, TOutput>
         return new DataflowBuilder<TInput, TAccumulator>(_sourceBlock, newBlock);
     }
 
+    public DataflowBuilder<TInput, TOutput[]> Batch(int batchSize)
+    {
+        var newBlock = new BatchBlock<TOutput>(batchSize);
+        AddBlock(newBlock);
+        return new DataflowBuilder<TInput, TOutput[]>(_sourceBlock, newBlock);
+    }
+
     public IPropagatorBlock<TInput, TOutput> Build()
     {
         if (typeof(TOutput) == typeof(DoneResult))
