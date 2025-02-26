@@ -151,9 +151,9 @@ public class DataflowBuilderTests
             Array([0, 1, 2, 3, 4, 5]),
             new DataflowBuilder<int>()
                 .Filter(x => x % 2 == 1) // 1, 3, 5
-                .Transform(x => x + 1)     // 2, 4, 6
+                .Transform(x => x + 1)   // 2, 4, 6
                 .Filter(x => x < 6)      // 2, 4
-                .Transform(x => x - 2)     // 0, 2
+                .Transform(x => x - 2)   // 0, 2
                 .Build(),
             Array([0, 2])
         ).SetName("Transform and Filters should be interchangeable");
@@ -169,7 +169,7 @@ public class DataflowBuilderTests
         yield return new TestCaseData(
             Array([0, 1, 2]),
             new DataflowBuilder<int>()
-                .Transform(x => $"{x}-str") // int -> str
+                .Transform(x => $"{x}-str")    // int -> str
                 .Transform(x => new { A = x }) // str -> anon object
                 .Build(),
             Array([new { A = "0-str" }, new { A = "1-str" }, new { A = "2-str" }])
@@ -179,7 +179,7 @@ public class DataflowBuilderTests
             Array([0, 1, 2, 3, 4, 5]),
             new DataflowBuilder<int>()
                 .Filter(x => x % 2 == 0) // 0, 2, 4
-                .Transform(x => $"{x}") // "0", "2", "4"
+                .Transform(x => $"{x}")  // "0", "2", "4"
                 .Build(),
             Array(["0", "2", "4"])
         ).SetName("should allow Filter before Transform to different type");
@@ -187,8 +187,8 @@ public class DataflowBuilderTests
         yield return new TestCaseData(
             Array([0, 1, 2, 3, 4, 5]),
             new DataflowBuilder<int>()
-                .Filter(x => x % 2 == 0) // 0, 2, 4
-                .Transform(x => $"{x}") // "0", "2", "4"
+                .Filter(x => x % 2 == 0)       // 0, 2, 4
+                .Transform(x => $"{x}")        // "0", "2", "4"
                 .Filter(x => int.Parse(x) > 0) // "2", "4"
                 .Build(),
             Array(["2", "4"])
@@ -197,11 +197,11 @@ public class DataflowBuilderTests
         yield return new TestCaseData(
             Array([0, 1, 2, 3, 4, 5]),
             new DataflowBuilder<int>()
-                .Filter(x => x % 2 == 0) // 0, 2, 4
-                .Transform(x => $"{x}") // "0", "2", "4"
-                .Filter(x => int.Parse(x) > 0) // "2", "4"
-                .Transform(x => int.Parse(x) * 2) // 4, 8
-                .Filter(x => x > 5) // 8
+                .Filter(x => x % 2 == 0)                   // 0, 2, 4
+                .Transform(x => $"{x}")                    // "0", "2", "4"
+                .Filter(x => int.Parse(x) > 0)             // "2", "4"
+                .Transform(x => int.Parse(x) * 2)          // 4, 8
+                .Filter(x => x > 5)                        // 8
                 .Transform(x => x == 8 ? "ate" : "hungry") // "ate"
                 .Build(),
             Array(["ate"])
@@ -221,15 +221,15 @@ public class DataflowBuilderTests
         yield return new TestCaseData(
             Array(0, 1, 2, 3, 4, 5),
             new DataflowBuilder<int>()
-                .Filter(x => x % 2 == 0)                 // 0, 2, 4
-                .Transform(x => new[] {x, x + 1})          // [0, 1], [2, 3], [4, 5]
-                .TransformMany(xes => xes)                 // 0, 1, 2, 3, 4, 5
-                .Transform(x => $"{x}_{x}")                // "0_0", "1_1", "2_2", "3_3", "4_4", "5_5"
-                .Transform(x => x.Split("_"))              // ["0", "0"], ["1", "1"], ["2", "2"], ["3", "3"], ["4", "4"], ["5", "5"]
-                .TransformMany(xes => xes)                 // "0", "0", "1", "1", "2", "2", "3", "3", "4", "4", "5", "5"
-                .Filter(x => int.Parse(x) > 0)           // "1", "1", "2", "2", "3", "3", "4", "4", "5", "5"
-                .Transform(x => int.Parse(x) * 2)          // 2, 2, 4, 4, 6, 6, 8, 8, 10, 10
-                .Filter(x => x > 5)                      // 6, 6, 8, 8, 10, 10
+                .Filter(x => x % 2 == 0)          // 0, 2, 4
+                .Transform(x => new[] {x, x + 1}) // [0, 1], [2, 3], [4, 5]
+                .TransformMany(xes => xes)        // 0, 1, 2, 3, 4, 5
+                .Transform(x => $"{x}_{x}")       // "0_0", "1_1", "2_2", "3_3", "4_4", "5_5"
+                .Transform(x => x.Split("_"))     // ["0", "0"], ["1", "1"], ["2", "2"], ["3", "3"], ["4", "4"], ["5", "5"]
+                .TransformMany(xes => xes)        // "0", "0", "1", "1", "2", "2", "3", "3", "4", "4", "5", "5"
+                .Filter(x => int.Parse(x) > 0)    // "1", "1", "2", "2", "3", "3", "4", "4", "5", "5"
+                .Transform(x => int.Parse(x) * 2) // 2, 2, 4, 4, 6, 6, 8, 8, 10, 10
+                .Filter(x => x > 5)               // 6, 6, 8, 8, 10, 10
                 .Build(),
             Array(6, 6, 8, 8, 10, 10)
         ).SetName("complicated Transform manys");
