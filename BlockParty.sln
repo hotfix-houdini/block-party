@@ -13,14 +13,10 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BlockParty.Tests", "tests\B
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "sln", "sln", "{70532E65-D3E1-4E7E-B5F4-4E4B9A776079}"
 	ProjectSection(SolutionItems) = preProject
+		.editorconfig = .editorconfig
 		latest-release-notes.md = latest-release-notes.md
 		NuGet.config = NuGet.config
 		README.md = README.md
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{9EBB51A4-5729-4AF5-9826-4B6F417D0CCE}"
-	ProjectSection(SolutionItems) = preProject
-		.editorconfig = .editorconfig
 	EndProjectSection
 EndProject
 Global
