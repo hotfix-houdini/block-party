@@ -147,6 +147,59 @@ graph TD
 "));
     }
 
+    [Test]
+    public async Task Kafka_ShouldWaitForAllReplicatedPipelinesToCompleteBeforePropagating()
+    {
+        // arrange
+        var results = new List<string>();
+        var onesDone = 0;
+        var all1sDone = new TaskCompletionSource();
+        var pipeline = new DataflowBuilder<int>()
+            .Kafka(
+                keySelector: i => i % 3,
+                allowedKeys: [1, 2],
+                replicatedPipeline: (key, builder) => builder
+                    .Transform(i =>
+                    {
+                        if (key == 2)
+                        {
+                            all1sDone.Task.Wait();
+                            Task.Delay(50).Wait();
+                        }
+
+                        return i;
+                    })
+                    .TransformMany(i => Enumerable.Range(0, i).Select(j => $"{key}"))
+                    .Transform(i => (value: i, key: key)))
+            .Transform(downstreamTuple =>
+            {
+                if (downstreamTuple.key == 1)
+                {
+                    onesDone++;
+                    if (onesDone == 4)
+                    {
+                        all1sDone.SetResult();
+                    }
+                }
+                return downstreamTuple.value;
+            })
+            .Action(x => results.Add(x))
+            .Build();
+
+        // act
+        pipeline.Post(4);
+        pipeline.Post(5);
+        pipeline.Post(6);
+        pipeline.Complete();
+        await pipeline.Completion;
+
+        // assert
+        Assert.That(results, Is.EqualTo(["1", "1", "1", "1", "2", "2", "2", "2", "2"]).AsCollection);
+    }
+
+    // kafka should propagate when some or all pipelines fault (if 1 faults, they all fault???? do we need to cross link them all????)
+    // kafka should construct expected blockchain/mermaid diagram
+
     private static IEnumerable<TestCaseData> DataPipelineShouldFlowTestCases()
     {
         yield return new TestCaseData(
@@ -324,6 +377,20 @@ graph TD
                 .Build(),
             Array<int[]>([0])
         ).SetName("batch should work with less than batch amount streamed");
+
+        yield return new TestCaseData(
+            Array(4, 5, 6),
+            new DataflowBuilder<int>()
+                .Kafka(
+                    keySelector: i => i % 3,                                                // partition into 0, 1, or 2
+                    allowedKeys: [1, 2],                                                    // only replicate pipeline for key == 1 or 2.
+                    replicatedPipeline: (key, builder) => builder                           // continue the chain with access to the partitionKey
+                        .TransformMany(i => Enumerable.Range(0, i).Select(j => $"{key}")))  // 4 => 4 "1"'s , 5 => 5 "2"'s, 6 => filtered out. Demonstrates partition key usage.
+                .Batch(9)                                                                   // combine all results so we can deterministically order them
+                .TransformMany(combinedResults => combinedResults.OrderBy(s => s))          // deterministically order results for assertion
+                .Build(),
+            Array("1", "1", "1", "1", "2", "2", "2", "2", "2")
+        ).SetName("kafka should fanout and recombine");
     }
 
     private static T[] Array<T>(params T[] elements) => elements;

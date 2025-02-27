@@ -3,6 +3,7 @@ using BlockParty.Blocks.Filter;
 using BlockParty.Visualizer;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
@@ -102,6 +103,38 @@ public class DataflowBuilder<TInput, TOutput>
         var newBlock = new BatchBlock<TOutput>(batchSize);
         AddBlock(newBlock, "BatchBlock");
         return new DataflowBuilder<TInput, TOutput[]>(_sourceBlock, newBlock, _blockChain);
+    }
+
+    public DataflowBuilder<TInput, TReplicatedPipelineOutput> Kafka<TKey, TReplicatedPipelineOutput>(
+        Func<TOutput, TKey> keySelector,
+        IEnumerable<TKey> allowedKeys,
+        Func<TKey, DataflowBuilder<TOutput>, DataflowBuilder<TOutput, TReplicatedPipelineOutput>> replicatedPipeline)
+        where TKey : IEquatable<TKey>
+    {
+        var newBlock = new BufferBlock<TReplicatedPipelineOutput>();
+
+        // wait need to definitely linkto and then select ouut the completitions. 
+        var dedicatedPipelines = new List<IPropagatorBlock<TOutput, TReplicatedPipelineOutput>>();
+        foreach (var allowedKey in allowedKeys)
+        {
+            var newBuilder = new DataflowBuilder<TOutput>();
+            var partitionSpecificPipeline = replicatedPipeline(allowedKey, newBuilder).Build();
+            _lastBlock.LinkTo(partitionSpecificPipeline, _linkOptions, item => keySelector(item).Equals(allowedKey)); // todo action block with lookup for O(1) routing
+            partitionSpecificPipeline.LinkTo(newBlock); // NOT with auto-complete propagation (which is greedy; doesn't wait for all pipelines) 
+            // toDo: manage blockchain
+            dedicatedPipelines.Add(partitionSpecificPipeline);
+        };
+
+        var allDedicatedPipelinesDone = Task.WhenAll(dedicatedPipelines.Select(pipeline => pipeline.Completion));
+        allDedicatedPipelinesDone.ContinueWith(_ =>
+        {
+            // todo fault propagation 
+            newBlock.Complete();
+        });
+
+        _lastBlock.LinkTo(DataflowBlock.NullTarget<TOutput>()); // filter out unallowed keys for message discarding
+        // todo add joinblock to blockchain
+        return new DataflowBuilder<TInput, TReplicatedPipelineOutput>(_sourceBlock, newBlock, _blockChain);
     }
 
     public IPropagatorBlock<TInput, TOutput> Build()
