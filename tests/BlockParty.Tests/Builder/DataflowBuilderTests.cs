@@ -104,6 +104,49 @@ public class DataflowBuilderTests
         Assert.That(sum, Is.EqualTo(14.0));
     }
 
+    [Test]
+    public void GenerateMermaidGraph_ShouldCreateExpectedGraph()
+    {
+        // arrange
+        var sum = 0.0;
+        var unbuiltPipeline = new DataflowBuilder<int>()
+            .Transform(i => new int[] { i, i + 1 })
+            .TransformMany(numbers => numbers)
+            .Filter(i => i % 2 == 0)
+            .Beam<TestAccumulator>(
+                    window: TimeSpan.FromSeconds(2),
+                    (i, acc) => acc.Value += i,
+                    (i, _) => i * 1_000_000_000)
+            .Batch(2)
+            .Action(windowBatch => sum += windowBatch.Sum(window => window.Value))
+            .Action(async batchDone => await Task.Delay(1));
+
+        // act
+        var mermaidGraph = unbuiltPipeline.GenerateMermaidGraph();
+
+        // assert
+        Assert.That(mermaidGraph, Is.EqualTo(@"```mermaid
+graph TD
+  buffer_0[""BufferBlock&nbsp;&lt;Int32,&nbsp;Int32&gt;""]
+  transform_1[""TransformBlock&nbsp;&lt;Int32,&nbsp;Int32[]&gt;""]
+  transformMany_2[""TransformManyBlock&nbsp;&lt;Int32[],&nbsp;Int32&gt;""]
+  filter_3[""FilterBlock&nbsp;&lt;Int32,&nbsp;Int32&gt;""]
+  beam_4[""BeamBlock&nbsp;&lt;Int32,&nbsp;TestAccumulator&gt;""]
+  batch_5[""BatchBlock&nbsp;&lt;TestAccumulator,&nbsp;TestAccumulator[]&gt;""]
+  transform_6[""TransformBlock&nbsp;&lt;TestAccumulator[],&nbsp;DoneResult&gt;""]
+  transform_7[""TransformBlock&nbsp;&lt;DoneResult,&nbsp;DoneResult&gt;""]
+
+  buffer_0 --> transform_1
+  transform_1 --> transformMany_2
+  transformMany_2 --> filter_3
+  filter_3 --> beam_4
+  beam_4 --> batch_5
+  batch_5 --> transform_6
+  transform_6 --> transform_7
+```
+"));
+    }
+
     private static IEnumerable<TestCaseData> DataPipelineShouldFlowTestCases()
     {
         yield return new TestCaseData(

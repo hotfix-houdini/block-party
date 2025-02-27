@@ -1,5 +1,6 @@
 ﻿using BlockParty.Blocks.Beam;
 using BlockParty.Blocks.Filter;
+using BlockParty.Visualizer;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -11,6 +12,7 @@ public class DataflowBuilder<TInput, TOutput>
 {
     protected readonly BufferBlock<TInput> _sourceBlock;
     protected ISourceBlock<TOutput> _lastBlock;
+    protected List<BlockNode> _blockChain;
 
     private static readonly DataflowLinkOptions _linkOptions = new()
     {
@@ -18,34 +20,35 @@ public class DataflowBuilder<TInput, TOutput>
     };
 
     protected DataflowBuilder(BufferBlock<TInput> inputBlock)
-        : this(inputBlock, null)
+        : this(inputBlock, null, [ BlockNode.Create<TInput, TInput>("BufferBlock") ])
     {
     }
 
-    private DataflowBuilder(BufferBlock<TInput> originalBlock, ISourceBlock<TOutput> currentBlock)
+    private DataflowBuilder(BufferBlock<TInput> originalBlock, ISourceBlock<TOutput> currentBlock, List<BlockNode> blockChain)
     {
         _sourceBlock = originalBlock;
         _lastBlock = currentBlock;
+        _blockChain = blockChain;
     }
 
     public DataflowBuilder<TInput, TNewType> Transform<TNewType>(Func<TOutput, TNewType> lambda)
     {
         var newBlock = new TransformBlock<TOutput, TNewType>(lambda);
-        AddBlock(newBlock);
-        return new DataflowBuilder<TInput, TNewType>(_sourceBlock, newBlock);
+        AddBlock(newBlock, "TransformBlock");
+        return new DataflowBuilder<TInput, TNewType>(_sourceBlock, newBlock, _blockChain);
     }
 
     public DataflowBuilder<TInput, TNewType> TransformMany<TNewType>(Func<TOutput, IEnumerable<TNewType>> lambda)
     {
         var newBlock = new TransformManyBlock<TOutput, TNewType>(lambda);
-        AddBlock(newBlock);
-        return new DataflowBuilder<TInput, TNewType>(_sourceBlock, newBlock);
+        AddBlock(newBlock, "TransformManyBlock");
+        return new DataflowBuilder<TInput, TNewType>(_sourceBlock, newBlock, _blockChain);
     }
 
     public DataflowBuilder<TInput, TOutput> Filter(FilterBlock<TOutput>.Predicate predicate)
     {
         var newBlock = new FilterBlock<TOutput>(predicate);
-        AddBlock(newBlock);
+        AddBlock(newBlock, "FilterBlock");
         return this;
     }
 
@@ -62,8 +65,8 @@ public class DataflowBuilder<TInput, TOutput>
             lambda(input);
             return DoneResult.Instance;
         });
-        AddBlock(newBlock);
-        return new DataflowBuilder<TInput, DoneResult>(_sourceBlock, newBlock);
+        AddBlock(newBlock, "TransformBlock");
+        return new DataflowBuilder<TInput, DoneResult>(_sourceBlock, newBlock, _blockChain);
     }
 
     /// <summary>
@@ -79,8 +82,8 @@ public class DataflowBuilder<TInput, TOutput>
             await lambda(input);
             return DoneResult.Instance;
         });
-        AddBlock(newBlock);
-        return new DataflowBuilder<TInput, DoneResult>(_sourceBlock, newBlock);
+        AddBlock(newBlock, "TransformBlock");
+        return new DataflowBuilder<TInput, DoneResult>(_sourceBlock, newBlock, _blockChain);
     }
 
     public DataflowBuilder<TInput, TAccumulator> Beam<TAccumulator>(
@@ -90,15 +93,15 @@ public class DataflowBuilder<TInput, TOutput>
         BeamBlockSettings settings = null) where TAccumulator : class, IAccumulator, new()
     {
         var newBlock = new BeamBlock<TOutput, TAccumulator>(window, accumlateMethod, timeSelectionMethod, settings);
-        AddBlock(newBlock);
-        return new DataflowBuilder<TInput, TAccumulator>(_sourceBlock, newBlock);
+        AddBlock(newBlock, "BeamBlock");
+        return new DataflowBuilder<TInput, TAccumulator>(_sourceBlock, newBlock, _blockChain);
     }
 
     public DataflowBuilder<TInput, TOutput[]> Batch(int batchSize)
     {
         var newBlock = new BatchBlock<TOutput>(batchSize);
-        AddBlock(newBlock);
-        return new DataflowBuilder<TInput, TOutput[]>(_sourceBlock, newBlock);
+        AddBlock(newBlock, "BatchBlock");
+        return new DataflowBuilder<TInput, TOutput[]>(_sourceBlock, newBlock, _blockChain);
     }
 
     public IPropagatorBlock<TInput, TOutput> Build()
@@ -111,9 +114,16 @@ public class DataflowBuilder<TInput, TOutput>
         return DataflowBlock.Encapsulate(_sourceBlock, _lastBlock);
     }
 
-    private void AddBlock<TNewType>(IPropagatorBlock<TOutput, TNewType> newBlock)
+    public string GenerateMermaidGraph()
+    {
+        var visualizer = new PipelineVisualizer();
+        return visualizer.Visualize(_blockChain);
+    }
+
+    private void AddBlock<TNewType>(IPropagatorBlock<TOutput, TNewType> newBlock, string name)
     {
         _lastBlock.LinkTo(newBlock, _linkOptions);
         _lastBlock = newBlock as ISourceBlock<TOutput>;
+        _blockChain.Add(BlockNode.Create<TOutput, TNewType>(name));
     }
 }
