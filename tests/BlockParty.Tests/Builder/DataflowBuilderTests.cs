@@ -197,7 +197,102 @@ graph TD
         Assert.That(results, Is.EqualTo(["1", "1", "1", "1", "2", "2", "2", "2", "2"]).AsCollection);
     }
 
-    // kafka should propagate when some or all pipelines fault (if 1 faults, they all fault???? do we need to cross link them all????)
+    [Test]
+    public void Kafka_ShouldPropagateFaultsIfAllKafkaPipelinesFail()
+    {
+        // arrange
+        var pipeline = new DataflowBuilder<int>()
+            .Kafka(
+                keySelector: i => i % 2,
+                allowedKeys: [0, 1],
+                replicatedPipeline: (key, builder) => builder
+                    .Action(i => throw new Exception($"should bomb here {key}")))
+            .Action(doneSignals => throw new Exception("shouldn't process this"))
+            .Build();
+
+        // act
+        pipeline.Post(1);
+        pipeline.Post(2);
+        pipeline.Complete();
+        var potentialException = Assert.ThrowsAsync<AggregateException>(async () => await pipeline.Completion);
+
+        // assert
+        Assert.That(potentialException, Is.Not.Null);
+        Assert.That(potentialException.Message, Does.Contain("should bomb here 0"));
+        Assert.That(potentialException.Message, Does.Contain("should bomb here 1"));
+        Assert.That(potentialException.Message, Does.Not.Contain("shouldn't process this"));
+    }
+
+    [Test]
+    public void Kafka_ShouldPropagateFaultsIfOneKafkaPipelinesFails()
+    {
+        // arrange
+        var pipeline = new DataflowBuilder<int>()
+            .Kafka(
+                keySelector: i => i % 2,
+                allowedKeys: [0, 1],
+                replicatedPipeline: (key, builder) => builder
+                    .Action(i =>
+                    {
+                        if (key == 0)
+                        {
+                            throw new Exception($"should bomb here {key}");
+                        }
+                    }))
+            .Action(doneSignals => throw new Exception("shouldn't process this"))
+            .Build();
+
+        // act
+        pipeline.Post(1);
+        pipeline.Post(2);
+        pipeline.Complete();
+        var potentialException = Assert.ThrowsAsync<AggregateException>(async () => await pipeline.Completion);
+
+        // assert
+        Assert.That(potentialException, Is.Not.Null);
+        Assert.That(potentialException.Message, Does.Contain("should bomb here 0"));
+        Assert.That(potentialException.Message, Does.Not.Contain("should bomb here 1"));
+        Assert.That(potentialException.Message, Does.Not.Contain("shouldn't process this"));
+    }
+
+    [Test]
+    public void Kafka_ShouldPropagateFaultsIfUpstreamBlocksFail() // Wraps the exception once? I'm okay with it
+    {
+        // arrange
+        var pipeline = new DataflowBuilder<int>()
+            .Transform(i =>
+            {
+                if (i == 7)
+                {
+                    throw new Exception("7 ate 9!!!!!");
+                }
+                return i;
+            })
+            .Kafka(
+                keySelector: i => i % 2,
+                allowedKeys: [0, 1],
+                replicatedPipeline: (key, builder) => builder
+                    .Action(async i =>
+                    {
+                        await Task.Delay(1);
+                    }))
+            .Action(doneSignals => throw new Exception("shouldn't process this"))
+            .Build();
+
+        // act
+        for (int i = 0; i <= 9; i++)
+        {
+            pipeline.Post(i);
+        }
+        pipeline.Complete();
+        var potentialException = Assert.ThrowsAsync<AggregateException>(async () => await pipeline.Completion);
+
+        // assert
+        Assert.That(potentialException, Is.Not.Null);
+        Assert.That(potentialException.Message, Does.Contain("7 ate 9!!!!!"));
+        Assert.That(potentialException.Message, Does.Not.Contain("shouldn't process this"));
+    }
+
     // kafka should construct expected blockchain/mermaid diagram
 
     private static IEnumerable<TestCaseData> DataPipelineShouldFlowTestCases()

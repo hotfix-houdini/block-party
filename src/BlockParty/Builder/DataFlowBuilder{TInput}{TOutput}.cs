@@ -113,7 +113,6 @@ public class DataflowBuilder<TInput, TOutput>
     {
         var newBlock = new BufferBlock<TReplicatedPipelineOutput>();
 
-        // wait need to definitely linkto and then select ouut the completitions. 
         var dedicatedPipelines = new List<IPropagatorBlock<TOutput, TReplicatedPipelineOutput>>();
         foreach (var allowedKey in allowedKeys)
         {
@@ -126,10 +125,17 @@ public class DataflowBuilder<TInput, TOutput>
         };
 
         var allDedicatedPipelinesDone = Task.WhenAll(dedicatedPipelines.Select(pipeline => pipeline.Completion));
-        allDedicatedPipelinesDone.ContinueWith(_ =>
+        allDedicatedPipelinesDone.ContinueWith(async allCompleteTask =>
         {
-            // todo fault propagation 
-            newBlock.Complete();
+            if (allCompleteTask.IsFaulted)
+            {
+                var flattenedExceptions = allCompleteTask.Exception.Flatten().InnerExceptions.Distinct();
+                ((IDataflowBlock)newBlock).Fault(new AggregateException(flattenedExceptions));
+            }
+            else
+            {
+                newBlock.Complete();
+            }
         });
 
         _lastBlock.LinkTo(DataflowBlock.NullTarget<TOutput>()); // filter out unallowed keys for message discarding
