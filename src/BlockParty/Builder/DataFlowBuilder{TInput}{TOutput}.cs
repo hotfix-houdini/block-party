@@ -135,7 +135,7 @@ public class DataflowBuilder<TInput, TOutput>
                     }
                 });
 
-                // propagate faults to other partitions
+                // propagate faults sideways
                 _ = independentPipeline.Completion.ContinueWith(pipelineCompletion =>
                 {
                     if (pipelineCompletion.IsFaulted)
@@ -149,6 +149,7 @@ public class DataflowBuilder<TInput, TOutput>
 
                 return independentPipeline;
             });
+        // ActionBlock lookup for O(1) fanouts vs .LinkTo(..)'s looping behavior.
         var dispatcherBlock = new ActionBlock<TOutput>(async item =>
         {
             var partitionKeyMatch = partitionPipelines.TryGetValue(keySelector(item), out var partitionPipeline);
@@ -169,7 +170,7 @@ public class DataflowBuilder<TInput, TOutput>
                 if (allPartitionsDone.IsFaulted)
                 {
                     var flattenedExceptions = allPartitionsDone.Exception.Flatten().InnerExceptions.Distinct();
-                    ((IDataflowBlock)recombinedBlock).Fault(new AggregateException(flattenedExceptions));
+                    ((IDataflowBlock)recombinedBlock).Fault(new AggregateException(flattenedExceptions)); // almost always a noop with the fast-fault?
                 }
                 else
                 {
