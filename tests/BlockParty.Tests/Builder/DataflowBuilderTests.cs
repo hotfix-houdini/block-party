@@ -207,7 +207,7 @@ graph TD
                 allowedKeys: [0, 1],
                 replicatedPipeline: (key, builder) => builder
                     .Action(i => throw new Exception($"should bomb here {key}")))
-            .Action(doneSignals => throw new Exception("shouldn't process this"))
+            .Action(doneSignals => throw new Exception("might get here"))
             .Build();
 
         // act
@@ -218,13 +218,11 @@ graph TD
 
         // assert
         Assert.That(potentialException, Is.Not.Null);
-        Assert.That(potentialException.Message, Does.Contain("should bomb here 0"));
-        Assert.That(potentialException.Message, Does.Contain("should bomb here 1"));
-        Assert.That(potentialException.Message, Does.Not.Contain("shouldn't process this"));
+        Assert.That(potentialException.Message, Does.Contain("should bomb here 0").Or.Contains("should bomb here 1")); // non-deterministic
     }
 
     [Test]
-    public void Kafka_ShouldPropagateFaultsIfOneKafkaPipelinesFails()
+    public void Kafka_ShouldBreakOutOfInfiniteStreamIfAPartitionFaults()
     {
         // arrange
         var pipeline = new DataflowBuilder<int>()
@@ -239,20 +237,18 @@ graph TD
                             throw new Exception($"should bomb here {key}");
                         }
                     }))
-            .Action(doneSignals => throw new Exception("shouldn't process this"))
+            .Action(doneSignals => { })
             .Build();
 
-        // act
+        // act    
+        pipeline.Post(0);
         pipeline.Post(1);
-        pipeline.Post(2);
-        pipeline.Complete();
+        // no complete
         var potentialException = Assert.ThrowsAsync<AggregateException>(async () => await pipeline.Completion);
 
         // assert
         Assert.That(potentialException, Is.Not.Null);
         Assert.That(potentialException.Message, Does.Contain("should bomb here 0"));
-        Assert.That(potentialException.Message, Does.Not.Contain("should bomb here 1"));
-        Assert.That(potentialException.Message, Does.Not.Contain("shouldn't process this"));
     }
 
     [Test]

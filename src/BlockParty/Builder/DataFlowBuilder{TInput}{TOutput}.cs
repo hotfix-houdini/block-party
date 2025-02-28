@@ -111,36 +111,75 @@ public class DataflowBuilder<TInput, TOutput>
         Func<TKey, DataflowBuilder<TOutput>, DataflowBuilder<TOutput, TReplicatedPipelineOutput>> replicatedPipeline)
         where TKey : IEquatable<TKey>
     {
-        var newBlock = new BufferBlock<TReplicatedPipelineOutput>();
+        var upstreamSignaler = new TaskCompletionSource<Exception>();
 
-        var dedicatedPipelines = new List<IPropagatorBlock<TOutput, TReplicatedPipelineOutput>>();
-        foreach (var allowedKey in allowedKeys)
-        {
-            var newBuilder = new DataflowBuilder<TOutput>();
-            var partitionSpecificPipeline = replicatedPipeline(allowedKey, newBuilder).BuildWithoutActionNullTargeting();
-            _lastBlock.LinkTo(partitionSpecificPipeline, _linkOptions, item => keySelector(item).Equals(allowedKey)); // todo action block with lookup for O(1) routing
-            partitionSpecificPipeline.LinkTo(newBlock); // NOT with auto-complete propagation (which is greedy; doesn't wait for all pipelines) 
-            // toDo: manage blockchain
-            dedicatedPipelines.Add(partitionSpecificPipeline);
-        };
+        var recombinedBlock = new BufferBlock<TReplicatedPipelineOutput>();
+        var partitionPipelines = allowedKeys.ToDictionary(
+            keySelector: key => key,
+            elementSelector: key =>
+            {
+                var independentBuilder = new DataflowBuilder<TOutput>();
+                var independentPipeline = replicatedPipeline(key, independentBuilder).BuildWithoutActionNullTargeting();
+                independentPipeline.LinkTo(recombinedBlock); // NOT with auto-complete propagation (which is greedy; doesn't wait for all pipelines) 
 
-        var allDedicatedPipelinesDone = Task.WhenAll(dedicatedPipelines.Select(pipeline => pipeline.Completion));
-        allDedicatedPipelinesDone.ContinueWith(allCompleteTask =>
+                // propagate upstream complete/fault
+                _ = upstreamSignaler.Task.ContinueWith(resultTask =>
+                {
+                    if (resultTask.Result != null)
+                    {
+                        independentPipeline.Fault(resultTask.Result);
+                    }
+                    else
+                    {
+                        independentPipeline.Complete();
+                    }
+                });
+
+                // propagate faults to other partitions
+                _ = independentPipeline.Completion.ContinueWith(pipelineCompletion =>
+                {
+                    if (pipelineCompletion.IsFaulted)
+                    {
+                        upstreamSignaler.TrySetResult(pipelineCompletion.Exception);
+
+                        // fault downstream fast too
+                        ((IDataflowBlock)recombinedBlock).Fault(new AggregateException(pipelineCompletion.Exception));
+                    }
+                });
+
+                return independentPipeline;
+            });
+        var dispatcherBlock = new ActionBlock<TOutput>(async item =>
         {
-            if (allCompleteTask.IsFaulted)
+            var partitionKeyMatch = partitionPipelines.TryGetValue(keySelector(item), out var partitionPipeline);
+            if (partitionKeyMatch)
             {
-                var flattenedExceptions = allCompleteTask.Exception.Flatten().InnerExceptions.Distinct();
-                ((IDataflowBlock)newBlock).Fault(new AggregateException(flattenedExceptions));
+                await partitionPipeline.SendAsync(item);
             }
-            else
-            {
-                newBlock.Complete();
-            }
+
+            // implicitly filter out un-allowed partition keys
         });
+        dispatcherBlock.Completion.ContinueWith(upstreamSignal => upstreamSignaler.TrySetResult(upstreamSignal.Exception));
 
-        _lastBlock.LinkTo(DataflowBlock.NullTarget<TOutput>()); // filter out unallowed keys for message discarding
-        // todo add joinblock to blockchain
-        return new DataflowBuilder<TInput, TReplicatedPipelineOutput>(_sourceBlock, newBlock, _blockChain);
+        // chain partition completion downstream
+        _ = Task
+            .WhenAll(partitionPipelines.Values.Select(p => p.Completion))
+            .ContinueWith(allPartitionsDone =>
+            {
+                if (allPartitionsDone.IsFaulted)
+                {
+                    var flattenedExceptions = allPartitionsDone.Exception.Flatten().InnerExceptions.Distinct();
+                    ((IDataflowBlock)recombinedBlock).Fault(new AggregateException(flattenedExceptions));
+                }
+                else
+                {
+                    recombinedBlock.Complete();
+                }
+            });
+
+        // add block chains
+        _lastBlock.LinkTo(dispatcherBlock, _linkOptions);
+        return new DataflowBuilder<TInput, TReplicatedPipelineOutput>(_sourceBlock, recombinedBlock, _blockChain);
     }
 
     public IPropagatorBlock<TInput, TOutput> Build()
