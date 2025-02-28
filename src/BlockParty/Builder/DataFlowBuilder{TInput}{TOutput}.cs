@@ -117,7 +117,7 @@ public class DataflowBuilder<TInput, TOutput>
         foreach (var allowedKey in allowedKeys)
         {
             var newBuilder = new DataflowBuilder<TOutput>();
-            var partitionSpecificPipeline = replicatedPipeline(allowedKey, newBuilder).Build();
+            var partitionSpecificPipeline = replicatedPipeline(allowedKey, newBuilder).BuildWithoutActionNullTargeting();
             _lastBlock.LinkTo(partitionSpecificPipeline, _linkOptions, item => keySelector(item).Equals(allowedKey)); // todo action block with lookup for O(1) routing
             partitionSpecificPipeline.LinkTo(newBlock); // NOT with auto-complete propagation (which is greedy; doesn't wait for all pipelines) 
             // toDo: manage blockchain
@@ -125,7 +125,7 @@ public class DataflowBuilder<TInput, TOutput>
         };
 
         var allDedicatedPipelinesDone = Task.WhenAll(dedicatedPipelines.Select(pipeline => pipeline.Completion));
-        allDedicatedPipelinesDone.ContinueWith(async allCompleteTask =>
+        allDedicatedPipelinesDone.ContinueWith(allCompleteTask =>
         {
             if (allCompleteTask.IsFaulted)
             {
@@ -149,7 +149,11 @@ public class DataflowBuilder<TInput, TOutput>
         {
             _lastBlock.LinkTo(DataflowBlock.NullTarget<TOutput>());
         }
+        return BuildWithoutActionNullTargeting();
+    }
 
+    protected IPropagatorBlock<TInput, TOutput> BuildWithoutActionNullTargeting()
+    {
         return DataflowBlock.Encapsulate(_sourceBlock, _lastBlock);
     }
 

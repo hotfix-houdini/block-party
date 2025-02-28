@@ -276,7 +276,7 @@ graph TD
                     {
                         await Task.Delay(1);
                     }))
-            .Action(doneSignals => throw new Exception("shouldn't process this"))
+            .Action(doneSignals => { })
             .Build();
 
         // act
@@ -290,7 +290,33 @@ graph TD
         // assert
         Assert.That(potentialException, Is.Not.Null);
         Assert.That(potentialException.Message, Does.Contain("7 ate 9!!!!!"));
-        Assert.That(potentialException.Message, Does.Not.Contain("shouldn't process this"));
+    }
+
+    [Test]
+    public async Task Kafka_WithEndingAction_ShouldNotNullTargetTheSignalsAsync()
+    {
+        // arrange
+        var doneSignalCount = 0;
+        var pipeline = new DataflowBuilder<int>()
+            .Kafka(
+                keySelector: i => i % 2,
+                allowedKeys: [0, 1],
+                replicatedPipeline: (key, builder) => builder
+                    .Action(async i =>
+                    {
+                        await Task.Delay(1);
+                    }))
+            .Action(doneSignal => doneSignalCount++)
+            .Build();
+
+        // act
+        pipeline.Post(1);
+        pipeline.Post(2);
+        pipeline.Complete();
+        await pipeline.Completion;
+
+        // assert
+        Assert.That(doneSignalCount, Is.EqualTo(2));
     }
 
     // kafka should construct expected blockchain/mermaid diagram
