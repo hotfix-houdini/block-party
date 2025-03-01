@@ -508,6 +508,8 @@ graph TD
                 .Build(),
             Array("1", "1", "1", "1", "2", "2", "2", "2", "2")
         ).SetName("kafka should fanout and recombine");
+
+        // kafka in kafka should flow
     }
 
     private static T[] Array<T>(params T[] elements) => elements;
