@@ -21,15 +21,33 @@ public record BlockNode
 
     private static string ConstructTypeName<TType>()
     {
-        var type = typeof(TType);
-        var typeName = type.Name;
-        if (type.IsGenericType)
-        {
-            var typeParameters = type.GetGenericArguments().ToList();
-            typeName = type.Name.Substring(0, type.Name.IndexOf('`')) + "&lt;" +
-                string.Join(",&nbsp;", Array.ConvertAll(type.GetGenericArguments(), t => t.Name)) + "&gt;";
-        }
-
-        return typeName;
+        return ConstructTypeName(typeof(TType));
     }
+
+    private static string ConstructTypeName(Type type)
+    {
+        if (!type.IsGenericType)
+            return type.Name;
+
+        var typeName = type.Name.Substring(0, type.Name.IndexOf('`'));
+        var typeArguments = type.GetGenericArguments()
+                                .Select(ConstructTypeName); // Recursively process generic arguments
+
+        return $"{typeName}<{string.Join(", ", typeArguments)}>";
+    }
+
+
+    //private static string ConstructTypeName<TType>()
+    //{
+    //    var type = typeof(TType);
+    //    var typeName = type.Name;
+    //    if (type.IsGenericType)
+    //    {
+    //        var typeParameters = type.GetGenericArguments().ToList();
+    //        typeName = type.Name.Substring(0, type.Name.IndexOf('`')) + "&lt;" +
+    //            string.Join(",&nbsp;", Array.ConvertAll(type.GetGenericArguments(), t => t.Name)) + "&gt;";
+    //    }
+
+    //    return typeName;
+    //}
 }

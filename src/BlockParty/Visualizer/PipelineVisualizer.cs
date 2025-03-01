@@ -29,9 +29,59 @@ graph TD
 ";
     }
 
+    public string Visualize(BlockNode2 blockList)
+    {
+        var mermaidNodes = new StringBuilder();
+        var mermaidLinks = new StringBuilder();
+
+        var processedNodes = new HashSet<int>();
+        var nodeQueue = new Queue<BlockNode2>();
+        nodeQueue.Enqueue(blockList);
+        processedNodes.Add(blockList.Id);
+
+        while (nodeQueue.Count > 0)
+        {
+            var node = nodeQueue.Dequeue();
+            mermaidNodes.AppendLine($"  {NodeName(node)}[\"{node.Name}&nbsp;&lt;{NodeTypes(node)}&gt;\"]");
+
+            foreach (var linkedChild in node.Children)
+            {
+                mermaidLinks.AppendLine($"  {NodeName(node)} --> {NodeName(linkedChild)}");
+                if (!processedNodes.Contains(linkedChild.Id))
+                {
+                    nodeQueue.Enqueue(linkedChild);
+                    processedNodes.Add(linkedChild.Id);
+                }
+            }
+        }
+
+        return $@"```mermaid
+graph TD
+{mermaidNodes}
+{mermaidLinks}```
+";
+    }
+
     private static string NodeName(BlockNode node, int i)
     {
         return $"{ToCamelCase(node.Name).Replace("Block", "")}_{i}";
+    }
+
+    private static string NodeName(BlockNode2 node)
+    {
+        return $"{ToCamelCase(node.Name).Replace("Block", "")}_{node.Id}";
+    }
+
+    private static string NodeTypes(BlockNode2 node)
+    {
+        if (node.OutputType == null)
+        {
+            return $"{node.InputType}";
+        }
+        else
+        {
+            return $"{node.InputType},&nbsp;{node.OutputType}";
+        }
     }
 
     private static string ToCamelCase(string str)
