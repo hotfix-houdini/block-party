@@ -118,7 +118,11 @@ public class DataflowBuilderTests
                     (i, acc) => acc.Value += i,
                     (i, _) => i * 1_000_000_000)
             .Batch(2)
-            .Action(windowBatch => sum += windowBatch.Sum(window => window.Value))
+            .Kafka(
+                keySelector: batch => batch.Count(),
+                allowedKeys: [0, 1, 2],
+                (key, builder) => builder.Transform(batch => batch.Count()))
+            .Action(batchCounts => sum += batchCounts)
             .Action(async batchDone => await Task.Delay(1));
 
         // act
@@ -127,22 +131,40 @@ public class DataflowBuilderTests
         // assert
         Assert.That(mermaidGraph, Is.EqualTo(@"```mermaid
 graph TD
-  buffer_0[""BufferBlock&nbsp;&lt;Int32,&nbsp;Int32&gt;""]
-  transform_1[""TransformBlock&nbsp;&lt;Int32,&nbsp;Int32[]&gt;""]
-  transformMany_2[""TransformManyBlock&nbsp;&lt;Int32[],&nbsp;Int32&gt;""]
-  filter_3[""FilterBlock&nbsp;&lt;Int32,&nbsp;Int32&gt;""]
-  beam_4[""BeamBlock&nbsp;&lt;Int32,&nbsp;TestAccumulator&gt;""]
-  batch_5[""BatchBlock&nbsp;&lt;TestAccumulator,&nbsp;TestAccumulator[]&gt;""]
-  transform_6[""TransformBlock&nbsp;&lt;TestAccumulator[],&nbsp;DoneResult&gt;""]
-  transform_7[""TransformBlock&nbsp;&lt;DoneResult,&nbsp;DoneResult&gt;""]
+  buffer_0[""BufferBlock&lt;Int32&gt;""]
+  transform_1[""TransformBlock&lt;Int32,Int32[]&gt;""]
+  transformMany_2[""TransformManyBlock&lt;Int32[],Int32&gt;""]
+  filter_3[""FilterBlock&lt;Int32&gt;""]
+  beam_4[""BeamBlock&lt;Int32,TestAccumulator&gt;""]
+  batch_5[""BatchBlock&lt;TestAccumulator&gt;""]
+  action_6[""ActionBlock&lt;TestAccumulator[]&gt;""]
+  buffer_7[""BufferBlock&lt;TestAccumulator[]&gt;""]
+  buffer_9[""BufferBlock&lt;TestAccumulator[]&gt;""]
+  buffer_11[""BufferBlock&lt;TestAccumulator[]&gt;""]
+  transform_8[""TransformBlock&lt;TestAccumulator[],Int32&gt;""]
+  transform_10[""TransformBlock&lt;TestAccumulator[],Int32&gt;""]
+  transform_12[""TransformBlock&lt;TestAccumulator[],Int32&gt;""]
+  buffer_13[""BufferBlock&lt;Int32&gt;""]
+  transform_14[""TransformBlock&lt;Int32,DoneResult&gt;""]
+  transform_15[""TransformBlock&lt;DoneResult,DoneResult&gt;""]
 
   buffer_0 --> transform_1
   transform_1 --> transformMany_2
   transformMany_2 --> filter_3
   filter_3 --> beam_4
   beam_4 --> batch_5
-  batch_5 --> transform_6
-  transform_6 --> transform_7
+  batch_5 --> action_6
+  action_6 --> buffer_7
+  action_6 --> buffer_9
+  action_6 --> buffer_11
+  buffer_7 --> transform_8
+  buffer_9 --> transform_10
+  buffer_11 --> transform_12
+  transform_8 --> buffer_13
+  transform_10 --> buffer_13
+  transform_12 --> buffer_13
+  buffer_13 --> transform_14
+  transform_14 --> transform_15
 ```
 "));
     }
@@ -315,7 +337,7 @@ graph TD
         Assert.That(doneSignalCount, Is.EqualTo(2));
     }
 
-    // kafka should construct expected blockchain/mermaid diagram
+    // kafka should construct expected blockchain/mermaid diagram ??? or redudant
 
     private static IEnumerable<TestCaseData> DataPipelineShouldFlowTestCases()
     {

@@ -1,4 +1,5 @@
-﻿using System.Threading.Tasks.Dataflow;
+﻿using BlockParty.Builder.DAG;
+using System.Threading.Tasks.Dataflow;
 
 namespace BlockParty.Builder;
 
@@ -13,5 +14,12 @@ public class DataflowBuilder<TInput> : DataflowBuilder<TInput, TInput>
     public DataflowBuilder() : base(new BufferBlock<TInput>())
     {
         _lastBlock = _sourceBlock;
+        _blockDag = _blockDag.Add(_sourceBlock);
+    }
+
+    internal DataflowBuilder(DataflowDAG<TInput, TInput> startingDag) : base(new BufferBlock<TInput>(), startingDag)
+    {
+        _lastBlock = _sourceBlock;
+        _blockDag = _blockDag.Add(_sourceBlock);
     }
 }
