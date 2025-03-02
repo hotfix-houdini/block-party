@@ -91,7 +91,7 @@ public class DataflowBuilderTests
             endingPipeline.Post([i, i + 1]);
         }
         endingPipeline.Complete();
-        await endingPipeline.Completion; // no need (or option) to link to this pipeline downstream.// no need (or option) to link to this pipeline downstream.
+        await endingPipeline.Completion; // no need (or option) to link to this pipeline downstream.
 
         // assert
         /* flow:
@@ -102,6 +102,41 @@ public class DataflowBuilderTests
          *  => 14
          */
         Assert.That(sum, Is.EqualTo(14.0));
+    }
+
+    [Test]
+    public async Task SimpleKafkaExample()
+    {
+        // arrange
+        var results = new List<string>();
+        var unbuiltPartitionedPipeline = new DataflowBuilder<int>()
+            .Kafka(
+                keySelector: i => i % 3,
+                allowedKeys: [0, 1],                                   // can fitler out while partitioning; no n % 3 == 2 results 
+                (key, builder) =>                                      // now you continue with a "recipe" builder that gets replicated per allowedKey
+                    builder.Transform(i => $"{i} % 3 == {key}"))       // you have access to the key
+            .Batch(4)                                                  // fan partitions back in
+            .TransformMany(stringBatch => stringBatch.OrderBy(s => s)) // our in-order guarantee is only per-partition, not globally; lets sort for the deterministic test assertion 
+            .Action(s => results.Add(s));
+        var mermaidGraph = unbuiltPartitionedPipeline.GenerateMermaidGraph(); // can debug and access the mermaid graph
+        var partitionedPipeline = unbuiltPartitionedPipeline.Build();
+
+        // act
+        partitionedPipeline.Post(0); // partition 0
+        partitionedPipeline.Post(1); // partition 1
+        partitionedPipeline.Post(2); // partition 2; filtered out
+        partitionedPipeline.Post(3); // partition 0
+        partitionedPipeline.Post(4); // partition 1
+        partitionedPipeline.Post(5); // partition 2; filtered out
+        partitionedPipeline.Complete();
+        await partitionedPipeline.Completion;
+
+        // assert
+        Assert.That(results, Is.EqualTo([
+            "0 % 3 == 0",
+            "1 % 3 == 1",
+            "3 % 3 == 0",
+            "4 % 3 == 1"]).AsCollection);
     }
 
     [Test]
