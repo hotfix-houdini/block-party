@@ -115,7 +115,7 @@ public class DataflowBuilderTests
                 allowedKeys: [0, 1],                                   // can fitler out while partitioning; no n % 3 == 2 results 
                 (key, builder) =>                                      // now you continue with a "recipe" builder that gets replicated per allowedKey
                     builder.Transform(i => $"{i} % 3 == {key}"))       // you have access to the key
-            .Batch(2)                                                  // allow partitions fan back in
+            .Batch(4)                                                  // fan partitions back in
             .TransformMany(stringBatch => stringBatch.OrderBy(s => s)) // our in-order guarantee is only per-partition, not globally; lets sort for the deterministic test assertion 
             .Action(s => results.Add(s));
         var mermaidGraph = unbuiltPartitionedPipeline.GenerateMermaidGraph(); // can debug and access the mermaid graph
