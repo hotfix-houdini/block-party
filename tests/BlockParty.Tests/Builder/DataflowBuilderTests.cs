@@ -337,8 +337,6 @@ graph TD
         Assert.That(doneSignalCount, Is.EqualTo(2));
     }
 
-    // kafka should construct expected blockchain/mermaid diagram ??? or redudant
-
     private static IEnumerable<TestCaseData> DataPipelineShouldFlowTestCases()
     {
         yield return new TestCaseData(
