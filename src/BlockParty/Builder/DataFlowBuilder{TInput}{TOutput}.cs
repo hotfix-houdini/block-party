@@ -14,8 +14,6 @@ public class DataflowBuilder<TInput, TOutput>
     protected readonly BufferBlock<TInput> _sourceBlock;
     protected ISourceBlock<TOutput> _lastBlock;
     protected DataflowDAG<TInput, TOutput> _blockDag;
-    //protected List<BlockNode> _blockChain;
-
     private static readonly DataflowLinkOptions _linkOptions = new()
     {
         PropagateCompletion = true
@@ -111,6 +109,10 @@ public class DataflowBuilder<TInput, TOutput>
         return new DataflowBuilder<TInput, TOutput[]>(_sourceBlock, newBlock, newDag);
     }
 
+    /// <summary>
+    /// This introduces controlled parallelism into a pipeline where we can maintain in-order guarantees while horizontally scaling (in process) by an independent key.
+    /// This also fans back in so the in-order processing can continue, or so all branches can be awaited for completion.
+    /// </summary>
     public DataflowBuilder<TInput, TReplicatedPipelineOutput> Kafka<TKey, TReplicatedPipelineOutput>(
         Func<TOutput, TKey> keySelector,
         IEnumerable<TKey> allowedKeys,
@@ -125,16 +127,16 @@ public class DataflowBuilder<TInput, TOutput>
         var upstreamSignaler = new TaskCompletionSource<Exception>();
 
         var recombinedBlock = new BufferBlock<TReplicatedPipelineOutput>();
-        var nodesPerPipeline = replicatedPipeline(allowedKeys.First(), new DataflowBuilder<TOutput>())._blockDag._nodeCount;
-        var blockDags = new List<DataflowDAG<TOutput, TReplicatedPipelineOutput>>();
+        var nodesPerPipeline = replicatedPipeline(allowedKeys.First(), new DataflowBuilder<TOutput>())._blockDag.NodeCount;
+        var fannedOutDags = new List<DataflowDAG<TOutput, TReplicatedPipelineOutput>>();
         var partitionPipelines = allowedKeys.Select((key, i) => (key, i)).ToDictionary(
             keySelector: indexedKey => indexedKey.key,
             elementSelector: indexedKey =>
             {
-                var offsetDag = new DataflowDAG<TOutput, TOutput>(_blockDag._nodeId + 1 + (indexedKey.i * nodesPerPipeline));
+                var offsetDag = new DataflowDAG<TOutput, TOutput>(_blockDag.NextNodeId + 1 + (indexedKey.i * nodesPerPipeline));
                 var independentBuilder = new DataflowBuilder<TOutput>(offsetDag);
                 var unbuiltPipeline = replicatedPipeline(indexedKey.key, independentBuilder);
-                blockDags.Add(unbuiltPipeline._blockDag);
+                fannedOutDags.Add(unbuiltPipeline._blockDag);
 
                 var independentPipeline = unbuiltPipeline.BuildWithoutActionNullTargeting();
                 independentPipeline.LinkTo(recombinedBlock); // NOT with auto-complete propagation (which is greedy; doesn't wait for all pipelines) 
@@ -198,7 +200,7 @@ public class DataflowBuilder<TInput, TOutput>
         _lastBlock.LinkTo(dispatcherBlock, _linkOptions);
         var newDag = _blockDag.AddFanOutAndIn(
             dispatcherBlock,
-            blockDags,
+            fannedOutDags,
             recombinedBlock);
         return new DataflowBuilder<TInput, TReplicatedPipelineOutput>(_sourceBlock, recombinedBlock, newDag);
     }
