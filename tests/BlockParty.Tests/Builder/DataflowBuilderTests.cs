@@ -118,7 +118,11 @@ public class DataflowBuilderTests
                     (i, acc) => acc.Value += i,
                     (i, _) => i * 1_000_000_000)
             .Batch(2)
-            .Action(windowBatch => sum += windowBatch.Sum(window => window.Value))
+            .Kafka(
+                keySelector: batch => batch.Count(),
+                allowedKeys: [0, 1, 2],
+                (key, builder) => builder.Transform(batch => batch.Count()))
+            .Action(batchCounts => sum += batchCounts)
             .Action(async batchDone => await Task.Delay(1));
 
         // act
@@ -127,24 +131,210 @@ public class DataflowBuilderTests
         // assert
         Assert.That(mermaidGraph, Is.EqualTo(@"```mermaid
 graph TD
-  buffer_0[""BufferBlock&nbsp;&lt;Int32,&nbsp;Int32&gt;""]
-  transform_1[""TransformBlock&nbsp;&lt;Int32,&nbsp;Int32[]&gt;""]
-  transformMany_2[""TransformManyBlock&nbsp;&lt;Int32[],&nbsp;Int32&gt;""]
-  filter_3[""FilterBlock&nbsp;&lt;Int32,&nbsp;Int32&gt;""]
-  beam_4[""BeamBlock&nbsp;&lt;Int32,&nbsp;TestAccumulator&gt;""]
-  batch_5[""BatchBlock&nbsp;&lt;TestAccumulator,&nbsp;TestAccumulator[]&gt;""]
-  transform_6[""TransformBlock&nbsp;&lt;TestAccumulator[],&nbsp;DoneResult&gt;""]
-  transform_7[""TransformBlock&nbsp;&lt;DoneResult,&nbsp;DoneResult&gt;""]
+  buffer_0[""BufferBlock&lt;Int32&gt;""]
+  transform_1[""TransformBlock&lt;Int32,Int32[]&gt;""]
+  transformMany_2[""TransformManyBlock&lt;Int32[],Int32&gt;""]
+  filter_3[""FilterBlock&lt;Int32&gt;""]
+  beam_4[""BeamBlock&lt;Int32,TestAccumulator&gt;""]
+  batch_5[""BatchBlock&lt;TestAccumulator&gt;""]
+  action_6[""ActionBlock&lt;TestAccumulator[]&gt;""]
+  buffer_7[""BufferBlock&lt;TestAccumulator[]&gt;""]
+  buffer_9[""BufferBlock&lt;TestAccumulator[]&gt;""]
+  buffer_11[""BufferBlock&lt;TestAccumulator[]&gt;""]
+  transform_8[""TransformBlock&lt;TestAccumulator[],Int32&gt;""]
+  transform_10[""TransformBlock&lt;TestAccumulator[],Int32&gt;""]
+  transform_12[""TransformBlock&lt;TestAccumulator[],Int32&gt;""]
+  buffer_13[""BufferBlock&lt;Int32&gt;""]
+  transform_14[""TransformBlock&lt;Int32,DoneResult&gt;""]
+  transform_15[""TransformBlock&lt;DoneResult,DoneResult&gt;""]
 
   buffer_0 --> transform_1
   transform_1 --> transformMany_2
   transformMany_2 --> filter_3
   filter_3 --> beam_4
   beam_4 --> batch_5
-  batch_5 --> transform_6
-  transform_6 --> transform_7
+  batch_5 --> action_6
+  action_6 --> buffer_7
+  action_6 --> buffer_9
+  action_6 --> buffer_11
+  buffer_7 --> transform_8
+  buffer_9 --> transform_10
+  buffer_11 --> transform_12
+  transform_8 --> buffer_13
+  transform_10 --> buffer_13
+  transform_12 --> buffer_13
+  buffer_13 --> transform_14
+  transform_14 --> transform_15
 ```
 "));
+    }
+
+    [Test]
+    public async Task Kafka_ShouldWaitForAllReplicatedPipelinesToCompleteBeforePropagating()
+    {
+        // arrange
+        var results = new List<string>();
+        var onesDone = 0;
+        var all1sDone = new TaskCompletionSource();
+        var pipeline = new DataflowBuilder<int>()
+            .Kafka(
+                keySelector: i => i % 3,
+                allowedKeys: [1, 2],
+                replicatedPipeline: (key, builder) => builder
+                    .Transform(i =>
+                    {
+                        if (key == 2)
+                        {
+                            all1sDone.Task.Wait();
+                            Task.Delay(50).Wait();
+                        }
+
+                        return i;
+                    })
+                    .TransformMany(i => Enumerable.Range(0, i).Select(j => $"{key}"))
+                    .Transform(i => (value: i, key: key)))
+            .Transform(downstreamTuple =>
+            {
+                if (downstreamTuple.key == 1)
+                {
+                    onesDone++;
+                    if (onesDone == 4)
+                    {
+                        all1sDone.SetResult();
+                    }
+                }
+                return downstreamTuple.value;
+            })
+            .Action(x => results.Add(x))
+            .Build();
+
+        // act
+        pipeline.Post(4);
+        pipeline.Post(5);
+        pipeline.Post(6);
+        pipeline.Complete();
+        await pipeline.Completion;
+
+        // assert
+        Assert.That(results, Is.EqualTo(["1", "1", "1", "1", "2", "2", "2", "2", "2"]).AsCollection);
+    }
+
+    [Test]
+    public void Kafka_ShouldPropagateFaultsIfAllKafkaPipelinesFail()
+    {
+        // arrange
+        var pipeline = new DataflowBuilder<int>()
+            .Kafka(
+                keySelector: i => i % 2,
+                allowedKeys: [0, 1],
+                replicatedPipeline: (key, builder) => builder
+                    .Action(i => throw new Exception($"should bomb here {key}")))
+            .Action(doneSignals => throw new Exception("might get here"))
+            .Build();
+
+        // act
+        pipeline.Post(1);
+        pipeline.Post(2);
+        pipeline.Complete();
+        var potentialException = Assert.ThrowsAsync<AggregateException>(async () => await pipeline.Completion);
+
+        // assert
+        Assert.That(potentialException, Is.Not.Null);
+        Assert.That(potentialException.Message, Does.Contain("should bomb here 0").Or.Contains("should bomb here 1")); // non-deterministic
+    }
+
+    [Test]
+    public void Kafka_ShouldBreakOutOfInfiniteStreamIfAPartitionFaults()
+    {
+        // arrange
+        var pipeline = new DataflowBuilder<int>()
+            .Kafka(
+                keySelector: i => i % 2,
+                allowedKeys: [0, 1],
+                replicatedPipeline: (key, builder) => builder
+                    .Action(i =>
+                    {
+                        if (key == 0)
+                        {
+                            throw new Exception($"should bomb here {key}");
+                        }
+                    }))
+            .Action(doneSignals => { })
+            .Build();
+
+        // act    
+        pipeline.Post(0);
+        pipeline.Post(1);
+        // no complete
+        var potentialException = Assert.ThrowsAsync<AggregateException>(async () => await pipeline.Completion);
+
+        // assert
+        Assert.That(potentialException, Is.Not.Null);
+        Assert.That(potentialException.Message, Does.Contain("should bomb here 0"));
+    }
+
+    [Test]
+    public void Kafka_ShouldPropagateFaultsIfUpstreamBlocksFail() // Wraps the exception once? I'm okay with it
+    {
+        // arrange
+        var pipeline = new DataflowBuilder<int>()
+            .Transform(i =>
+            {
+                if (i == 7)
+                {
+                    throw new Exception("7 ate 9!!!!!");
+                }
+                return i;
+            })
+            .Kafka(
+                keySelector: i => i % 2,
+                allowedKeys: [0, 1],
+                replicatedPipeline: (key, builder) => builder
+                    .Action(async i =>
+                    {
+                        await Task.Delay(1);
+                    }))
+            .Action(doneSignals => { })
+            .Build();
+
+        // act
+        for (int i = 0; i <= 9; i++)
+        {
+            pipeline.Post(i);
+        }
+        pipeline.Complete();
+        var potentialException = Assert.ThrowsAsync<AggregateException>(async () => await pipeline.Completion);
+
+        // assert
+        Assert.That(potentialException, Is.Not.Null);
+        Assert.That(potentialException.Message, Does.Contain("7 ate 9!!!!!"));
+    }
+
+    [Test]
+    public async Task Kafka_WithEndingAction_ShouldNotNullTargetTheSignalsAsync()
+    {
+        // arrange
+        var doneSignalCount = 0;
+        var pipeline = new DataflowBuilder<int>()
+            .Kafka(
+                keySelector: i => i % 2,
+                allowedKeys: [0, 1],
+                replicatedPipeline: (key, builder) => builder
+                    .Action(async i =>
+                    {
+                        await Task.Delay(1);
+                    }))
+            .Action(doneSignal => doneSignalCount++)
+            .Build();
+
+        // act
+        pipeline.Post(1);
+        pipeline.Post(2);
+        pipeline.Complete();
+        await pipeline.Completion;
+
+        // assert
+        Assert.That(doneSignalCount, Is.EqualTo(2));
     }
 
     private static IEnumerable<TestCaseData> DataPipelineShouldFlowTestCases()
@@ -324,6 +514,22 @@ graph TD
                 .Build(),
             Array<int[]>([0])
         ).SetName("batch should work with less than batch amount streamed");
+
+        yield return new TestCaseData(
+            Array(4, 5, 6),
+            new DataflowBuilder<int>()
+                .Kafka(
+                    keySelector: i => i % 3,                                                // partition into 0, 1, or 2
+                    allowedKeys: [1, 2],                                                    // only replicate pipeline for key == 1 or 2.
+                    replicatedPipeline: (key, builder) => builder                           // continue the chain with access to the partitionKey
+                        .TransformMany(i => Enumerable.Range(0, i).Select(j => $"{key}")))  // 4 => 4 "1"'s , 5 => 5 "2"'s, 6 => filtered out. Demonstrates partition key usage.
+                .Batch(9)                                                                   // combine all results so we can deterministically order them
+                .TransformMany(combinedResults => combinedResults.OrderBy(s => s))          // deterministically order results for assertion
+                .Build(),
+            Array("1", "1", "1", "1", "2", "2", "2", "2", "2")
+        ).SetName("kafka should fanout and recombine");
+
+        // kafka in kafka should flow
     }
 
     private static T[] Array<T>(params T[] elements) => elements;
