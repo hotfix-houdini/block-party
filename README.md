@@ -1,7 +1,7 @@
 # Overivew
 Extensions of the .NET TPL Dataflow Library. This package includes 2 components:
 
-- Several custom TPL Dataflow blocks useful for varoius scenarios.
+- Several custom TPL Dataflow blocks useful for various scenarios.
 - A builder framework for constructing dataflow pipelines with an aim to reduce the verbosity of constructing large pipelines.
 
 There is a strong emphasis on in-order processing and completion propagation.
@@ -11,7 +11,7 @@ Functionality provided:
 - **BeamBlock** - is inspired by Apache Beam, and lets you group a stream into finite time windows, and output an aggregate of each window.
 - **FilterBlock** - is a simple "where" statement.
 - **SequencePreservingBlock** - is used to maintain and re-order contiguous streams. Useful when a message broker might not guarantee message order.
-- **ThrottleBlock** - is used to gaurd downstream blocks with a time delay.
+- **ThrottleBlock** - is used to guard downstream blocks with a wall-clock throttle.
 - **DataflowBuilder** - is used to construct chains of blocks.
     - Compiles down into a single IPropagatorBlock via `DataflowBlock.Encapsulate`
     - Exposes a **Kafka** method, inspired by Apache Kafka, which provides in-order parallelism.
@@ -392,12 +392,20 @@ public void ShouldWaitForThrottleToElapseFor2ndEmit()
 }
 ```
 
-### DataflowBuilder
+# DataflowBuilder
 The builder uses generic types to let you continually chain the correct type of blocks from A -> B, B -> C, etc. It also automatically links blocks together and includes Completion Propagation.
 Generally, it just chains blocks together, while keeping a DAG structure interally so a Mermaid graph can be constructed.
 
-The `Kafka(..)` method not a simple `AddBlock wrapper` though. Instead, this message lets you replicate an inner builder pipeline horizontally, routing to each partition via partition keys of your choosing. This allows for parallel processing while maintaining in-order processing on a per-key basis.
-Within a Kafka Builder, you have access to the partitionKey if that oontext is needed.
+The `Kafka(..)` method is not a simple `AddBlock wrapper` though. Instead, this method lets you replicate an inner builder pipeline horizontally, routing to each partition via partition keys of your choosing. This allows for parallel processing while maintaining in-order processing on a per-key basis.
+Within a Kafka Builder, you have access to the partitionKey if that context is needed.
+
+The routing to each partition is accomplished by an `ActionBlock` with a `O(1)` dispatch method, as opposed to using Dataflow's `.LinkTo` which has `O(numLinks)` dispatching time. This is so large fanouts don't have a performance degredation.
+
+The mermaid graph is just a string return from a method before a pipeline is built. Debug locally to get the mermaid graph string and visualize it via:
+- VSCode and the mermaid graph extension
+- via Github's Markdown editor
+- via https://mermaid-js.github.io/mermaid-live-editor
+- any other Mermaid graph renderer
 
 Builder Examples:
 ```csharp
@@ -463,7 +471,7 @@ public async Task SimpleActionExample()
 }
 ```
 
-Kafka Examples:
+Kafka Example:
 ```csharp
 [Test]
 public async Task SimpleKafkaExample()
@@ -500,7 +508,7 @@ public async Task SimpleKafkaExample()
         "4 % 3 == 1"]).AsCollection);
 }
 ```
-with this grpah:
+with this graph:
 ```mermaid
 graph TD
   buffer_0["BufferBlock&lt;Int32&gt;"]
