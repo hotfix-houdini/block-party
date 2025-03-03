@@ -140,6 +140,47 @@ public class DataflowBuilderTests
     }
 
     [Test]
+    public async Task SimpleKafkaMessageDuplicationExample()
+    {
+        // arrange
+        // pre-compute partition mapper for high performance
+        var partitionMapper = new Dictionary<(bool hasDigit, bool hasLetter), string[]>()
+        {
+            {(hasDigit: false, hasLetter: false), [] },
+            {(hasDigit: true, hasLetter: false), ["numbers"] },
+            {(hasDigit: true, hasLetter: true), ["letters", "numbers"] },
+            {(hasDigit: false, hasLetter: true), ["letters"] },
+        };
+
+        var results = new List<string>();
+        var pubsubPipeline = new DataflowBuilder<string>()
+            .Kafka(
+                partitions: ["numbers", "letters"],
+                multiPartitionSelector: s => partitionMapper[(s.Any(char.IsDigit), s.Any(char.IsLetter))], // lookup the partition given the strings digit/character affinity
+                replicatedPipeline: (key, builder) => builder.Transform(s => $"{key}: {s}"))
+            .Batch(500)
+            .TransformMany(stringBatch => stringBatch.OrderBy(s => s))
+            .Action(s => results.Add(s))
+            .Build();
+
+        // act
+        pubsubPipeline.Post("abc");     // letters
+        pubsubPipeline.Post("123");     // numbers
+        pubsubPipeline.Post("abc 123"); // numbers and letters
+        pubsubPipeline.Complete();
+        await pubsubPipeline.Completion;
+
+        // assert
+        Assert.That(results, Is.EqualTo(
+            [
+                "letters: abc",
+                "letters: abc 123",
+                "numbers: 123",
+                "numbers: abc 123" // "abc 123" message got duplicated because it was sent to 2 partitions
+            ]).AsCollection);
+    }
+
+    [Test]
     public void GenerateMermaidGraph_ShouldCreateExpectedGraph()
     {
         // arrange

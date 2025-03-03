@@ -14,7 +14,7 @@ Functionality provided:
 - **ThrottleBlock** - is used to guard downstream blocks with a wall-clock throttle.
 - **DataflowBuilder** - is used to construct chains of blocks.
     - Compiles down into a single IPropagatorBlock via `DataflowBlock.Encapsulate`
-    - Exposes a **Kafka** method, inspired by Apache Kafka, which provides in-order parallelism.
+    - Exposes a **Kafka** method, inspired by Apache Kafka, which provides in-order parallelism and pub-sub semantics.
     - Exposes **Mermaid Graph Generation** so you can see the underlying blocks generated and better understand/debug a pipeline. 
 
 # Blocks
@@ -399,7 +399,11 @@ Generally, it just chains blocks together, while keeping a DAG structure interal
 The `Kafka(..)` method is not a simple `AddBlock wrapper` though. Instead, this method lets you replicate an inner builder pipeline horizontally, routing to each partition via partition keys of your choosing. This allows for parallel processing while maintaining in-order processing on a per-key basis.
 Within a Kafka Builder, you have access to the partitionKey if that context is needed.
 
-The routing to each partition is accomplished by an `ActionBlock` with a `O(1)` dispatch method, as opposed to using Dataflow's `.LinkTo` which has `O(numLinks)` dispatching time. This is so large fanouts don't have a performance degredation.
+There are two overloads which impacts the dispatching of messages:
+- an overload where a message is mapped to at most 1 partitons.
+- another overload where a message can be mapped to multiple partitions with message duplication. This is more similar to pub/sub scenario.
+
+The routing to each partition is accomplished by an `ActionBlock` with a `O(NumPartitionsToDispathcTo)` dispatch method, as opposed to using Dataflow's `.LinkTo` which has `O(numTotalLinks)` dispatching time. This is so large fanouts don't have a performance degredation.
 
 The mermaid graph is just a string return from a method before a pipeline is built. Debug locally to get the mermaid graph string and visualize it via:
 - VSCode and the mermaid graph extension
@@ -471,7 +475,7 @@ public async Task SimpleActionExample()
 }
 ```
 
-Kafka Example:
+Kafka Examples:
 ```csharp
 [Test]
 public async Task SimpleKafkaExample()
@@ -508,7 +512,7 @@ public async Task SimpleKafkaExample()
         "4 % 3 == 1"]).AsCollection);
 }
 ```
-with this graph:
+with with  graph:
 ```mermaid
 graph TD
   buffer_0["BufferBlock&lt;Int32&gt;"]
@@ -534,8 +538,75 @@ graph TD
   transformMany_8 --> transform_9
 ```
 
+```csharp
+[Test]
+public async Task SimpleKafkaMessageDuplicationExample()
+{
+    // arrange
+    // pre-compute partition mapper for high performance
+    var partitionMapper = new Dictionary<(bool hasDigit, bool hasLetter), string[]>()
+    {
+        {(hasDigit: false, hasLetter: false), [] },
+        {(hasDigit: true, hasLetter: false), ["numbers"] },
+        {(hasDigit: true, hasLetter: true), ["letters", "numbers"] },
+        {(hasDigit: false, hasLetter: true), ["letters"] },
+    };
 
-And a large mermaid graph with various blocks:
+    var results = new List<string>();
+    var pubsubPipeline = new DataflowBuilder<string>()
+        .Kafka(
+            partitions: ["numbers", "letters"],
+            multiPartitionSelector: s => partitionMapper[(s.Any(char.IsDigit), s.Any(char.IsLetter))], // lookup the partition given the strings digit/character affinity
+            replicatedPipeline: (key, builder) => builder.Transform(s => $"{key}: {s}"))
+        .Batch(500)
+        .TransformMany(stringBatch => stringBatch.OrderBy(s => s))
+        .Action(s => results.Add(s))
+        .Build();
+
+    // act
+    pubsubPipeline.Post("abc");     // letters
+    pubsubPipeline.Post("123");     // numbers
+    pubsubPipeline.Post("abc 123"); // numbers and letters
+    pubsubPipeline.Complete();
+    await pubsubPipeline.Completion;
+
+    // assert
+    Assert.That(results, Is.EqualTo(
+        [
+            "letters: abc",
+            "letters: abc 123",
+            "numbers: 123",
+            "numbers: abc 123" // "abc 123" message got duplicated because it was sent to 2 partitions
+        ]).AsCollection);
+}
+```
+```mermaid
+graph TD
+  buffer_0["BufferBlock&lt;String&gt;"]
+  action_1["ActionBlock&lt;String&gt;"]
+  buffer_2["BufferBlock&lt;String&gt;"]
+  buffer_4["BufferBlock&lt;String&gt;"]
+  transform_3["TransformBlock&lt;String,String&gt;"]
+  transform_5["TransformBlock&lt;String,String&gt;"]
+  buffer_6["BufferBlock&lt;String&gt;"]
+  batch_7["BatchBlock&lt;String&gt;"]
+  transformMany_8["TransformManyBlock&lt;String[],String&gt;"]
+  transform_9["TransformBlock&lt;String,DoneResult&gt;"]
+
+  buffer_0 --> action_1
+  action_1 --> buffer_2
+  action_1 --> buffer_4
+  buffer_2 --> transform_3
+  buffer_4 --> transform_5
+  transform_3 --> buffer_6
+  transform_5 --> buffer_6
+  buffer_6 --> batch_7
+  batch_7 --> transformMany_8
+  transformMany_8 --> transform_9
+```
+
+
+A large mermaid graph with various blocks:
 ```csharp
 var unbuiltPipeline = new DataflowBuilder<int>()
     .Transform(i => new int[] { i, i + 1 })

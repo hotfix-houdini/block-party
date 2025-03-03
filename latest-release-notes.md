@@ -1,6 +1,5 @@
 ### Release Notes
-Major features added with this release. 
+Upped major verison due to parameter name changes.
 
-- **Added** - BatchBlock to the Builder.
-- **Added** - `Kafka(..)` method to the Builder to maintain an in-order guarantee while allowing for parallelism.
-- **Added** - `.GenerateMermaidGraph()` method to the builder for debugging and development purposes. Generates a mermaid graph in string form of the pipeline which can be pasted into any mermaid graph renderer.
+- **Added** - An additional overload to `Kafka()` that allows for duplicating messages to multiple partitions.
+- **Renamed** - Kafka parameters to align with the message duplication potential.
