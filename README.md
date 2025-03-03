@@ -484,8 +484,8 @@ public async Task SimpleKafkaExample()
     var results = new List<string>();
     var unbuiltPartitionedPipeline = new DataflowBuilder<int>()
         .Kafka(
-            keySelector: i => i % 3,
-            allowedKeys: [0, 1],                                   // can fitler out while partitioning; no n % 3 == 2 results 
+            singlePartitionSelector: i => i % 3,
+            partitions: [0, 1],                                    // can fitler out while partitioning; no n % 3 == 2 results 
             (key, builder) =>                                      // now you continue with a "recipe" builder that gets replicated per allowedKey
                 builder.Transform(i => $"{i} % 3 == {key}"))       // you have access to the key
         .Batch(4)                                                  // fan partitions back in
@@ -608,6 +608,7 @@ graph TD
 
 A large mermaid graph with various blocks:
 ```csharp
+var sum = 0.0;
 var unbuiltPipeline = new DataflowBuilder<int>()
     .Transform(i => new int[] { i, i + 1 })
     .TransformMany(numbers => numbers)
@@ -618,8 +619,8 @@ var unbuiltPipeline = new DataflowBuilder<int>()
             (i, _) => i * 1_000_000_000)
     .Batch(2)
     .Kafka(
-        keySelector: batch => batch.Count(),
-        allowedKeys: [0, 1, 2],
+        singlePartitionSelector: batch => batch.Count(),
+        partitions: [0, 1, 2],
         (key, builder) => builder.Transform(batch => batch.Count()))
     .Action(batchCounts => sum += batchCounts)
     .Action(async batchDone => await Task.Delay(1));

@@ -112,7 +112,7 @@ public class DataflowBuilderTests
         var unbuiltPartitionedPipeline = new DataflowBuilder<int>()
             .Kafka(
                 singlePartitionSelector: i => i % 3,
-                partitions: [0, 1],                                   // can fitler out while partitioning; no n % 3 == 2 results 
+                partitions: [0, 1],                                    // can fitler out while partitioning; no n % 3 == 2 results 
                 (key, builder) =>                                      // now you continue with a "recipe" builder that gets replicated per allowedKey
                     builder.Transform(i => $"{i} % 3 == {key}"))       // you have access to the key
             .Batch(4)                                                  // fan partitions back in
