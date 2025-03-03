@@ -401,9 +401,9 @@ Within a Kafka Builder, you have access to the partitionKey if that context is n
 
 There are two overloads which impacts the dispatching of messages:
 - an overload where a message is mapped to at most 1 partitons.
-- another overload where a message can be mapped to multiple partitions with message duplication. This is more similar to pub/sub scenario.
+- another overload where a message can be mapped to multiple partitions with message duplication. This is more similar to pub/sub scenarios.
 
-The routing to each partition is accomplished by an `ActionBlock` with a `O(NumPartitionsToDispathcTo)` dispatch method, as opposed to using Dataflow's `.LinkTo` which has `O(numTotalLinks)` dispatching time. This is so large fanouts don't have a performance degredation.
+The routing to each partition is accomplished by an `ActionBlock` with a `O(NumPartitionsToDispatchTo)` dispatch method, as opposed to using Dataflow's `.LinkTo` which has `O(numTotalLinks)` dispatching time. This is so large fanouts don't have a performance degredation.
 
 The mermaid graph is just a string return from a method before a pipeline is built. Debug locally to get the mermaid graph string and visualize it via:
 - VSCode and the mermaid graph extension
@@ -512,7 +512,7 @@ public async Task SimpleKafkaExample()
         "4 % 3 == 1"]).AsCollection);
 }
 ```
-with with  graph:
+with this graph:
 ```mermaid
 graph TD
   buffer_0["BufferBlock&lt;Int32&gt;"]
@@ -538,6 +538,7 @@ graph TD
   transformMany_8 --> transform_9
 ```
 
+and
 ```csharp
 [Test]
 public async Task SimpleKafkaMessageDuplicationExample()
@@ -606,7 +607,7 @@ graph TD
 ```
 
 
-A large mermaid graph with various blocks:
+and a large mermaid graph with various blocks:
 ```csharp
 var sum = 0.0;
 var unbuiltPipeline = new DataflowBuilder<int>()
