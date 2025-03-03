@@ -112,50 +112,69 @@ public class DataflowBuilder<TInput, TOutput>
     /// <summary>
     /// This introduces controlled parallelism into a pipeline where we can maintain in-order guarantees while horizontally scaling (in process) by an independent key.
     /// This also fans back in so the in-order processing can continue, or so all branches can be awaited for completion.
+    /// <br/><br/>
+    /// 
+    /// This overload maps elements to a single partition without message duplication.
     /// </summary>
-    public DataflowBuilder<TInput, TReplicatedPipelineOutput> Kafka<TKey, TReplicatedPipelineOutput>(
-        Func<TOutput, TKey> keySelector,
-        IEnumerable<TKey> allowedKeys,
-        Func<TKey, DataflowBuilder<TOutput>, DataflowBuilder<TOutput, TReplicatedPipelineOutput>> replicatedPipeline)
-        where TKey : IEquatable<TKey>
+    public DataflowBuilder<TInput, TReplicatedPipelineOutput> Kafka<TPartition, TReplicatedPipelineOutput>(
+        Func<TOutput, TPartition> singlePartitionSelector,
+        IEnumerable<TPartition> partitions,
+        Func<TPartition, DataflowBuilder<TOutput>, DataflowBuilder<TOutput, TReplicatedPipelineOutput>> replicatedPipeline)
+        where TPartition : IEquatable<TPartition>
     {
-        if (!allowedKeys.Any())
+        IEnumerable<TPartition> wrappedEnumerableSelector(TOutput item) => [singlePartitionSelector(item)];
+        return Kafka(wrappedEnumerableSelector, partitions, replicatedPipeline);
+    }
+
+    /// <summary>
+    /// This introduces controlled parallelism into a pipeline where we can maintain in-order guarantees while horizontally scaling (in process) by an independent key.
+    /// This also fans back in so the in-order processing can continue, or so all branches can be awaited for completion.
+    /// <br/><br/>
+    /// 
+    /// This overload allows replicating messages to multiple partitions.
+    /// </summary>
+    public DataflowBuilder<TInput, TReplicatedPipelineOutput> Kafka<TPartition, TReplicatedPipelineOutput>(
+        Func<TOutput, IEnumerable<TPartition>> multiPartitionSelector,
+        IEnumerable<TPartition> partitions,
+        Func<TPartition, DataflowBuilder<TOutput>, DataflowBuilder<TOutput, TReplicatedPipelineOutput>> replicatedPipeline)
+        where TPartition : IEquatable<TPartition>
+    {
+        if (!partitions.Any())
         {
-            throw new ArgumentException("No allowed keys provided");
+            throw new ArgumentException("1 or more partitions is required.");
         }
 
         var upstreamSignaler = new TaskCompletionSource<Exception>();
 
         var recombinedBlock = new BufferBlock<TReplicatedPipelineOutput>();
-        var nodesPerPipeline = replicatedPipeline(allowedKeys.First(), new DataflowBuilder<TOutput>())._blockDag.NodeCount;
+        var nodesPerPartition = replicatedPipeline(partitions.First(), new DataflowBuilder<TOutput>())._blockDag.NodeCount;
         var fannedOutDags = new List<DataflowDAG<TOutput, TReplicatedPipelineOutput>>();
-        var partitionPipelines = allowedKeys.Select((key, i) => (key, i)).ToDictionary(
+        var partitionPipelines = partitions.Select((key, i) => (key, i)).ToDictionary(
             keySelector: indexedKey => indexedKey.key,
             elementSelector: indexedKey =>
             {
-                var offsetDag = new DataflowDAG<TOutput, TOutput>(_blockDag.NextNodeId + 1 + (indexedKey.i * nodesPerPipeline));
-                var independentBuilder = new DataflowBuilder<TOutput>(offsetDag);
-                var unbuiltPipeline = replicatedPipeline(indexedKey.key, independentBuilder);
-                fannedOutDags.Add(unbuiltPipeline._blockDag);
+                var offsetDag = new DataflowDAG<TOutput, TOutput>(_blockDag.NextNodeId + 1 + (indexedKey.i * nodesPerPartition));
+                var unbuiltPartition = replicatedPipeline(indexedKey.key, new DataflowBuilder<TOutput>(offsetDag));
+                fannedOutDags.Add(unbuiltPartition._blockDag);
 
-                var independentPipeline = unbuiltPipeline.BuildWithoutActionNullTargeting();
-                independentPipeline.LinkTo(recombinedBlock); // NOT with auto-complete propagation (which is greedy; doesn't wait for all pipelines) 
+                var singlePartition = unbuiltPartition.BuildWithoutActionNullTargeting();
+                singlePartition.LinkTo(recombinedBlock); // NOT with auto-complete propagation (which is greedy; doesn't wait for all pipelines) 
 
                 // propagate upstream complete/fault
                 _ = upstreamSignaler.Task.ContinueWith(resultTask =>
                 {
                     if (resultTask.Result != null)
                     {
-                        independentPipeline.Fault(resultTask.Result);
+                        singlePartition.Fault(resultTask.Result);
                     }
                     else
                     {
-                        independentPipeline.Complete();
+                        singlePartition.Complete();
                     }
                 });
 
                 // propagate faults sideways
-                _ = independentPipeline.Completion.ContinueWith(pipelineCompletion =>
+                _ = singlePartition.Completion.ContinueWith(pipelineCompletion =>
                 {
                     if (pipelineCompletion.IsFaulted)
                     {
@@ -166,15 +185,19 @@ public class DataflowBuilder<TInput, TOutput>
                     }
                 });
 
-                return independentPipeline;
+                return singlePartition;
             });
         // ActionBlock lookup for O(1) fanouts vs .LinkTo(..)'s looping behavior.
         var dispatcherBlock = new ActionBlock<TOutput>(async item =>
         {
-            var partitionKeyMatch = partitionPipelines.TryGetValue(keySelector(item), out var partitionPipeline);
-            if (partitionKeyMatch)
+            var partitionsToDispatchTo = multiPartitionSelector(item);
+            foreach (var partition in partitionsToDispatchTo)
             {
-                await partitionPipeline.SendAsync(item);
+                var partitionKeyMatch = partitionPipelines.TryGetValue(partition, out var partitionPipeline);
+                if (partitionKeyMatch)
+                {
+                    await partitionPipeline.SendAsync(item);
+                }
             }
 
             // implicitly filter out un-allowed partition keys
