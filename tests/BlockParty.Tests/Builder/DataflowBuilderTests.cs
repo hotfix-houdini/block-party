@@ -564,8 +564,23 @@ graph TD
             Array("1", "1", "1", "1", "2", "2", "2", "2", "2")
         ).SetName("kafka should fanout and recombine");
 
-
-        // kafka in kafka should flow
+        yield return new TestCaseData(
+            Array(4, 5, 6),
+            new DataflowBuilder<int>()
+                .Kafka(
+                    singlePartitionSelector: i => i % 3,                                    
+                    partitions: [1, 2],                                                     
+                    replicatedPipeline: (key, builder) => builder                           
+                        .TransformMany(i => Enumerable.Range(0, i).Select(j => $"{i}")))
+                        .Kafka(
+                            singlePartitionSelector: i => int.Parse(i) % 2,
+                            partitions: [1],
+                            (innerKey, innerBuilder) => innerBuilder.Transform(s => $"[{innerKey}]: {s}"))
+                .Batch(9)                                                                   
+                .TransformMany(combinedResults => combinedResults.OrderBy(s => s))          
+                .Build(),
+            Array("[1]: 5", "[1]: 5", "[1]: 5", "[1]: 5", "[1]: 5")
+        ).SetName("kafka in kafka should work");
 
         yield return new TestCaseData(
             Array("abc", "123", "abc 123"),
