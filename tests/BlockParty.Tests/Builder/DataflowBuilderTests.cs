@@ -111,8 +111,8 @@ public class DataflowBuilderTests
         var results = new List<string>();
         var unbuiltPartitionedPipeline = new DataflowBuilder<int>()
             .Kafka(
-                keySelector: i => i % 3,
-                allowedKeys: [0, 1],                                   // can fitler out while partitioning; no n % 3 == 2 results 
+                singlePartitionSelector: i => i % 3,
+                partitions: [0, 1],                                   // can fitler out while partitioning; no n % 3 == 2 results 
                 (key, builder) =>                                      // now you continue with a "recipe" builder that gets replicated per allowedKey
                     builder.Transform(i => $"{i} % 3 == {key}"))       // you have access to the key
             .Batch(4)                                                  // fan partitions back in
@@ -154,8 +154,8 @@ public class DataflowBuilderTests
                     (i, _) => i * 1_000_000_000)
             .Batch(2)
             .Kafka(
-                keySelector: batch => batch.Count(),
-                allowedKeys: [0, 1, 2],
+                singlePartitionSelector: batch => batch.Count(),
+                partitions: [0, 1, 2],
                 (key, builder) => builder.Transform(batch => batch.Count()))
             .Action(batchCounts => sum += batchCounts)
             .Action(async batchDone => await Task.Delay(1));
@@ -213,8 +213,8 @@ graph TD
         var all1sDone = new TaskCompletionSource();
         var pipeline = new DataflowBuilder<int>()
             .Kafka(
-                keySelector: i => i % 3,
-                allowedKeys: [1, 2],
+                singlePartitionSelector: i => i % 3,
+                partitions: [1, 2],
                 replicatedPipeline: (key, builder) => builder
                     .Transform(i =>
                     {
@@ -260,8 +260,8 @@ graph TD
         // arrange
         var pipeline = new DataflowBuilder<int>()
             .Kafka(
-                keySelector: i => i % 2,
-                allowedKeys: [0, 1],
+                singlePartitionSelector: i => i % 2,
+                partitions: [0, 1],
                 replicatedPipeline: (key, builder) => builder
                     .Action(i => throw new Exception($"should bomb here {key}")))
             .Action(doneSignals => throw new Exception("might get here"))
@@ -284,8 +284,8 @@ graph TD
         // arrange
         var pipeline = new DataflowBuilder<int>()
             .Kafka(
-                keySelector: i => i % 2,
-                allowedKeys: [0, 1],
+                singlePartitionSelector: i => i % 2,
+                partitions: [0, 1],
                 replicatedPipeline: (key, builder) => builder
                     .Action(i =>
                     {
@@ -322,8 +322,8 @@ graph TD
                 return i;
             })
             .Kafka(
-                keySelector: i => i % 2,
-                allowedKeys: [0, 1],
+                singlePartitionSelector: i => i % 2,
+                partitions: [0, 1],
                 replicatedPipeline: (key, builder) => builder
                     .Action(async i =>
                     {
@@ -352,8 +352,8 @@ graph TD
         var doneSignalCount = 0;
         var pipeline = new DataflowBuilder<int>()
             .Kafka(
-                keySelector: i => i % 2,
-                allowedKeys: [0, 1],
+                singlePartitionSelector: i => i % 2,
+                partitions: [0, 1],
                 replicatedPipeline: (key, builder) => builder
                     .Action(async i =>
                     {
@@ -554,8 +554,8 @@ graph TD
             Array(4, 5, 6),
             new DataflowBuilder<int>()
                 .Kafka(
-                    keySelector: i => i % 3,                                                // partition into 0, 1, or 2
-                    allowedKeys: [1, 2],                                                    // only replicate pipeline for key == 1 or 2.
+                    singlePartitionSelector: i => i % 3,                                    // partition into 0, 1, or 2
+                    partitions: [1, 2],                                                     // only replicate pipeline for key == 1 or 2.
                     replicatedPipeline: (key, builder) => builder                           // continue the chain with access to the partitionKey
                         .TransformMany(i => Enumerable.Range(0, i).Select(j => $"{key}")))  // 4 => 4 "1"'s , 5 => 5 "2"'s, 6 => filtered out. Demonstrates partition key usage.
                 .Batch(9)                                                                   // combine all results so we can deterministically order them
@@ -564,7 +564,42 @@ graph TD
             Array("1", "1", "1", "1", "2", "2", "2", "2", "2")
         ).SetName("kafka should fanout and recombine");
 
+
         // kafka in kafka should flow
+
+        yield return new TestCaseData(
+            Array("abc", "123", "abc 123"),
+            new DataflowBuilder<string>()   
+                .Kafka(
+                    partitions: ["numbers", "letters"],
+                    multiPartitionSelector: s =>
+                    {
+                        var partitions = new List<string>();
+                        var hasNumbers = s.Any(char.IsDigit);
+                        var hasLetters = s.Any(char.IsLetter);
+                        if (hasNumbers)
+                        {
+                            partitions.Add("numbers");
+                        }
+                        if (hasLetters)
+                        {
+                            partitions.Add("letters");
+                        }
+
+                        return partitions;
+                    },
+                    replicatedPipeline: (key, builder) => builder
+                        .Transform(s => $"{key}: {s}"))
+                .Batch(5000)
+                .TransformMany(combinedResults => combinedResults.OrderBy(s => s))          
+                .Build(),
+            Array(
+                "letters: abc",
+                "letters: abc 123",
+                "numbers: 123",
+                "numbers: abc 123" // message got duplicated to both letters and numbers partitions
+                )
+        ).SetName("kafka should support message duplication to multiple partitions");
     }
 
     private static T[] Array<T>(params T[] elements) => elements;
