@@ -84,4 +84,29 @@ public class SequencePreservingBlockTests
         // assert
         Assert.That(actualItems, Is.EqualTo(["1", "2", "3"]).AsCollection);
     }
+
+    [Test]
+    public void ShouldPropagateFault()
+    {
+        // arrange
+        var settings = new SequencePreservingBlockSettings()
+        {
+            SequenceInitialization = SequenceInitialization.FromFirstElement,
+            OnCompleteBufferedMessageBehavior = OnCompleteBufferedMessageBehavior.Discard,
+        };
+        var sequencePreservingBlock = new SequencePreservingBlock<string>(
+            sequenceIndexExtractor: (item) =>
+            {
+                throw new Exception("Test exception");
+                return long.Parse(item); 
+            }, settings);
+
+        // act
+        sequencePreservingBlock.Post("3");
+        var potentialException = Assert.ThrowsAsync<AggregateException>(async () => await sequencePreservingBlock.Completion);
+
+        // assert
+        Assert.That(potentialException, Is.Not.Null);
+        Assert.That(potentialException.Message, Does.Contain("Test exception"));
+    }
 }

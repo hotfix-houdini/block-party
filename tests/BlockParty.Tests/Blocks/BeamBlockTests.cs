@@ -314,6 +314,53 @@ public class BeamBlockTests
         // assert
         Assert.That(accumulators, Has.Count.EqualTo(expectedWindows));
     }
+
+    [Test]
+    public void ShouldPropagateFault_OnAccumulateMethod()
+    {
+        // arrange
+        var beamBlock = new BeamBlock<TestModel, TestAccumulator>(
+            TimeSpan.FromHours(1),
+            (streamed, accumulator) =>
+            {
+                if (true) throw new Exception("Test exception");
+                accumulator.Value += streamed.Value;
+            },
+            (streamed, _) => streamed.Time);
+
+        // act
+        beamBlock.Post(new TestModel() { Time = 1, Value = 1 });
+        var potentialException = Assert.ThrowsAsync<AggregateException>(async () => await beamBlock.Completion);
+
+        // assert
+        Assert.That(potentialException, Is.Not.Null);
+        Assert.That(potentialException.Message, Does.Contain("Test exception"));
+    }
+
+    [Test]
+    public void ShouldPropagateFault_OnTimeSelectionMethod()
+    {
+        // arrange
+        var beamBlock = new BeamBlock<TestModel, TestAccumulator>(
+            TimeSpan.FromHours(1),
+            (streamed, accumulator) =>
+            {
+                accumulator.Value += streamed.Value;
+            },
+            (streamed, _) =>
+            {
+                if (true) throw new Exception("Test exception");
+                return streamed.Time;
+            });
+
+        // act
+        beamBlock.Post(new TestModel() { Time = 1, Value = 1 });
+        var potentialException = Assert.ThrowsAsync<AggregateException>(async () => await beamBlock.Completion);
+
+        // assert
+        Assert.That(potentialException, Is.Not.Null);
+        Assert.That(potentialException.Message, Does.Contain("Test exception"));
+    }
 }
 
 public class TestModel

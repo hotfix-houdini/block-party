@@ -1,5 +1,4 @@
-﻿using BlockParty.Exceptions;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
@@ -30,22 +29,10 @@ public class FilterBlock<T> : IPropagatorBlock<T, T>, IReceivableSourceBlock<T>
     public FilterBlock(Predicate predicate)
     {
         var source = new BufferBlock<T>();
-        var target = new ActionBlock<T>(item =>
-        {
-            if (predicate(item))
-            {
-                var posted = source.Post(item);
-                if (!posted)
-                {
-                    throw new FailedToPostException();
-                }
-            }
-        });
+        var target = new BufferBlock<T>();
 
-        target.Completion.ContinueWith(delegate
-        {
-            source.Complete();
-        });
+        target.LinkTo(source, new DataflowLinkOptions() { PropagateCompletion = true }, item => predicate(item));
+        target.LinkTo(DataflowBlock.NullTarget<T>());
 
         m_target = target;
         m_source = source;

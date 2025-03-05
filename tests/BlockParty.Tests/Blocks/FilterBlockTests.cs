@@ -55,4 +55,26 @@ public class FilterBlockTests
         // assert
         Assert.That(actualOutputs, Is.EqualTo([0, 2, 4, 6, 8]).AsCollection);
     }
+
+    [Test]
+    public void Filter_ShouldPropagateFault()
+    {
+        // arrange
+        var filterBlock = new FilterBlock<int>(x => 
+        {
+            if (true)
+            {
+                throw new Exception("Test exception");
+            }
+            return true;
+        });
+
+        // act
+        filterBlock.Post(1);
+        var potentialException = Assert.ThrowsAsync<AggregateException>(async () => await filterBlock.Completion);
+
+        // assert
+        Assert.That(potentialException, Is.Not.Null);
+        Assert.That(potentialException.Message, Does.Contain("Test exception"));
+    }
 }
