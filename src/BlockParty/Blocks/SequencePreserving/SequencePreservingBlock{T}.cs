@@ -77,23 +77,35 @@ public class SequencePreservingBlock<T> : IPropagatorBlock<T, T>, IReceivableSou
             _pendingMessages.RemoveWhere(msg => _sequenceIndexExtractor(msg) <= _sequenceNumber);
         });
 
-        target.Completion.ContinueWith(delegate
+        target.Completion.ContinueWith(targetComplete =>
         {
-            if (_settings.OnCompleteBufferedMessageBehavior == OnCompleteBufferedMessageBehavior.Emit)
+            if (targetComplete.IsFaulted)
             {
-                foreach (var message in _pendingMessages)
+                ((IDataflowBlock)source).Fault(targetComplete.Exception);
+            }
+            else if (targetComplete.IsCanceled)
+            {
+                ((IDataflowBlock)source).Fault(new TaskCanceledException());
+            }
+            else
+            {
+                if (_settings.OnCompleteBufferedMessageBehavior == OnCompleteBufferedMessageBehavior.Emit)
                 {
-                    var posted = source.Post(message);
-                    if (!posted)
+                    foreach (var message in _pendingMessages)
                     {
-                        throw new FailedToPostException();
+                        var posted = source.Post(message);
+                        if (!posted)
+                        {
+                            ((IDataflowBlock)source).Fault(new FailedToPostException());
+                            break;
+                        }
                     }
+
+                    _pendingMessages.RemoveWhere(x => true);
                 }
 
-                _pendingMessages.RemoveWhere(x => true);
+                source.Complete();
             }
-
-            source.Complete();
         });
 
         m_target = target;
