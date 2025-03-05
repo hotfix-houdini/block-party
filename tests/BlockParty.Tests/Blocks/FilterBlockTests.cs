@@ -57,7 +57,7 @@ public class FilterBlockTests
     }
 
     [Test]
-    public async Task Filter_ShouldPropagateFault()
+    public void Filter_ShouldPropagateFault()
     {
         // arrange
         var filterBlock = new FilterBlock<int>(x => 

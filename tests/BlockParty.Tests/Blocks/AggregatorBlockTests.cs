@@ -34,4 +34,50 @@ public class AggregatorBlockTests
         Assert.That(aggregatedValues[1], Is.EqualTo((3, "2")));
         Assert.That(aggregatedValues[2], Is.EqualTo((4, "3")));
     }
+
+    [Test]
+    public void ShouldPropagateFaultFromAggregator()
+    {
+        // arrange
+        var innerBlock = new TransformBlock<int, string>(i =>
+        {
+            return $"{i}";
+        });
+        var aggregatorBlock = new AggregatorBlock<int, string, (int, string)>(innerBlock, (input, output) =>
+        {
+            if (true) throw new Exception("Test Exception");
+            return (input + 1, output);
+        });
+
+        // act
+        aggregatorBlock.Post(1);
+        var potentialException = Assert.ThrowsAsync<AggregateException>(async () => await aggregatorBlock.Completion);
+
+        // assert
+        Assert.That(potentialException, Is.Not.Null);
+        Assert.That(potentialException.Message, Does.Contain("Test Exception"));
+    }
+
+    [Test]
+    public void ShouldPropagateFaultFromInnerBlock()
+    {
+        // arrange
+        var innerBlock = new TransformBlock<int, string>(i =>
+        {
+            if (true) throw new Exception("Test Exception");
+            return $"{i}";
+        });
+        var aggregatorBlock = new AggregatorBlock<int, string, (int, string)>(innerBlock, (input, output) =>
+        {
+            return (input + 1, output);
+        });
+
+        // act
+        aggregatorBlock.Post(1);
+        var potentialException = Assert.ThrowsAsync<AggregateException>(async () => await aggregatorBlock.Completion);
+
+        // assert
+        Assert.That(potentialException, Is.Not.Null);
+        Assert.That(potentialException.Message, Does.Contain("Test Exception"));
+    }
 }
