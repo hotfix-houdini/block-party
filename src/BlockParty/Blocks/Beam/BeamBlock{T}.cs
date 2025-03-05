@@ -99,17 +99,28 @@ public class BeamBlock<TStreamedModel, TAccumulator>
             accumulateMethod(item, accumulator);
         });
 
-        target.Completion.ContinueWith(delegate
+        _ = target.Completion.ContinueWith(targetComplete =>
         {
-            if (initialized && !_settings.OmitIncompleteFinalWindow)
+            if (targetComplete.IsFaulted)
             {
-                var posted = source.Post(accumulator);
-                if (!posted)
-                {
-                    throw new FailedToPostException();
-                }
+                ((IDataflowBlock)source).Fault(targetComplete.Exception);
             }
-            source.Complete();
+            else if (targetComplete.IsCanceled)
+            {
+                ((IDataflowBlock)source).Fault(new TaskCanceledException());
+            }
+            else
+            {
+                if (initialized && !_settings.OmitIncompleteFinalWindow)
+                {
+                    var posted = source.Post(accumulator);
+                    if (!posted)
+                    {
+                        ((IDataflowBlock)source).Fault(new FailedToPostException());
+                    }
+                }
+                source.Complete();
+            }
         });
 
         m_target = target;
