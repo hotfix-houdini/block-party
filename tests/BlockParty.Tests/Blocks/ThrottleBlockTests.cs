@@ -172,4 +172,25 @@ public class ThrottleBlockTests
         // assert
         Assert.That(exception?.Message, Is.EqualTo("Period must be greater than or equal to 100 milliseconds. (Parameter 'throttle')"));
     }
+
+    [Test]
+    public void ShouldPropagateFault()
+    {
+        // arrange
+        var throttleBlock = new ThrottleBlock<int>(TimeSpan.FromMilliseconds(250));
+        var downstreamBlock = new ActionBlock<int>(i => { });
+
+        // act
+        throttleBlock.LinkTo(downstreamBlock, new DataflowLinkOptions()
+        {
+            PropagateCompletion = true
+        });
+        throttleBlock.Post(1);
+        throttleBlock.Fault(new Exception("Test Exception"));
+        var potentialException = Assert.ThrowsAsync<AggregateException>(async () => await downstreamBlock.Completion);
+
+        // assert
+        Assert.That(potentialException, Is.Not.Null);
+        Assert.That(potentialException.Message, Does.Contain("Test Exception"));
+    }
 }

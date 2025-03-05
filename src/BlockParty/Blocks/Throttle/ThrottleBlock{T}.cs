@@ -24,6 +24,7 @@ public class ThrottleBlock<T> : IPropagatorBlock<T, T>, IReceivableSourceBlock<T
     private readonly Timer _timer;
     private readonly SemaphoreSlim _semaphore = new(1, 1);
     private bool _completitionRequested = false;
+    private bool _fault = false;
 
     /// <summary>
     /// ThrottleBlock allows you to insert wall-clock delays into a TPL DataFlow pipeline.<br/>
@@ -43,9 +44,22 @@ public class ThrottleBlock<T> : IPropagatorBlock<T, T>, IReceivableSourceBlock<T
         var source = new BufferBlock<T>();
         var target = new ActionBlock<T>(_queue.Enqueue);
 
-        target.Completion.ContinueWith(delegate
+        target.Completion.ContinueWith(targetComplete =>
         {
-            _completitionRequested = true;
+            if (targetComplete.IsFaulted)
+            {
+                ((IDataflowBlock)source).Fault(targetComplete.Exception);
+                _fault = true;
+            }
+            else if (targetComplete.IsCanceled)
+            {
+                ((IDataflowBlock)source).Fault(new TaskCanceledException());
+                _fault = true;
+            }
+            else
+            {
+                _completitionRequested = true;
+            }
         });
 
         _timer = new Timer(async state =>
@@ -53,6 +67,12 @@ public class ThrottleBlock<T> : IPropagatorBlock<T, T>, IReceivableSourceBlock<T
             try
             {
                 await _semaphore.WaitAsync();
+                if (_fault)
+                {
+                    _timer?.Change(Timeout.Infinite, Timeout.Infinite);
+                    return;
+                }
+
                 var dequeued = _queue.TryDequeue(out var item);
                 if (dequeued)
                 {
