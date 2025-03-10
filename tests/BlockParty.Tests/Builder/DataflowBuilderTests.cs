@@ -185,6 +185,7 @@ public class DataflowBuilderTests
     {
         // arrange
         var sum = 0.0;
+        var windowCount = 0;
         var unbuiltPipeline = new DataflowBuilder<int>()
             .Transform(i => new int[] { i, i + 1 })
             .TransformMany(numbers => numbers)
@@ -193,6 +194,7 @@ public class DataflowBuilderTests
                     window: TimeSpan.FromSeconds(2),
                     (i, acc) => acc.Value += i,
                     (i, _) => i * 1_000_000_000)
+            .Tap(window => windowCount++)
             .Batch(2)
             .Kafka(
                 singlePartitionSelector: batch => batch.Count(),
@@ -212,35 +214,37 @@ graph TD
   transformMany_2[""TransformManyBlock&lt;Int32[],Int32&gt;""]
   filter_3[""FilterBlock&lt;Int32&gt;""]
   beam_4[""BeamBlock&lt;Int32,TestAccumulator&gt;""]
-  batch_5[""BatchBlock&lt;TestAccumulator&gt;""]
-  action_6[""ActionBlock&lt;TestAccumulator[]&gt;""]
-  buffer_7[""BufferBlock&lt;TestAccumulator[]&gt;""]
-  buffer_9[""BufferBlock&lt;TestAccumulator[]&gt;""]
-  buffer_11[""BufferBlock&lt;TestAccumulator[]&gt;""]
-  transform_8[""TransformBlock&lt;TestAccumulator[],Int32&gt;""]
-  transform_10[""TransformBlock&lt;TestAccumulator[],Int32&gt;""]
-  transform_12[""TransformBlock&lt;TestAccumulator[],Int32&gt;""]
-  buffer_13[""BufferBlock&lt;Int32&gt;""]
-  transform_14[""TransformBlock&lt;Int32,DoneResult&gt;""]
-  transform_15[""TransformBlock&lt;DoneResult,DoneResult&gt;""]
+  transform_5[""TransformBlock&lt;TestAccumulator,TestAccumulator&gt;""]
+  batch_6[""BatchBlock&lt;TestAccumulator&gt;""]
+  action_7[""ActionBlock&lt;TestAccumulator[]&gt;""]
+  buffer_8[""BufferBlock&lt;TestAccumulator[]&gt;""]
+  buffer_10[""BufferBlock&lt;TestAccumulator[]&gt;""]
+  buffer_12[""BufferBlock&lt;TestAccumulator[]&gt;""]
+  transform_9[""TransformBlock&lt;TestAccumulator[],Int32&gt;""]
+  transform_11[""TransformBlock&lt;TestAccumulator[],Int32&gt;""]
+  transform_13[""TransformBlock&lt;TestAccumulator[],Int32&gt;""]
+  buffer_14[""BufferBlock&lt;Int32&gt;""]
+  transform_15[""TransformBlock&lt;Int32,DoneResult&gt;""]
+  transform_16[""TransformBlock&lt;DoneResult,DoneResult&gt;""]
 
   buffer_0 --> transform_1
   transform_1 --> transformMany_2
   transformMany_2 --> filter_3
   filter_3 --> beam_4
-  beam_4 --> batch_5
-  batch_5 --> action_6
-  action_6 --> buffer_7
-  action_6 --> buffer_9
-  action_6 --> buffer_11
-  buffer_7 --> transform_8
-  buffer_9 --> transform_10
-  buffer_11 --> transform_12
-  transform_8 --> buffer_13
-  transform_10 --> buffer_13
-  transform_12 --> buffer_13
-  buffer_13 --> transform_14
-  transform_14 --> transform_15
+  beam_4 --> transform_5
+  transform_5 --> batch_6
+  batch_6 --> action_7
+  action_7 --> buffer_8
+  action_7 --> buffer_10
+  action_7 --> buffer_12
+  buffer_8 --> transform_9
+  buffer_10 --> transform_11
+  buffer_12 --> transform_13
+  transform_9 --> buffer_14
+  transform_11 --> buffer_14
+  transform_13 --> buffer_14
+  buffer_14 --> transform_15
+  transform_15 --> transform_16
 ```
 "));
     }
@@ -411,6 +415,38 @@ graph TD
 
         // assert
         Assert.That(doneSignalCount, Is.EqualTo(2));
+    }
+
+    [Test]
+    public async Task Tap_ShouldAllowForSideEffects()
+    {
+        // arrange
+        var tappedInts = new List<int>();
+        var tappedStrings = new List<string>();
+        var outputs = new List<string>();
+
+        var pipeline = new DataflowBuilder<int>()
+            .Tap(i => tappedInts.Add(i + 1))
+            .Transform(i => $"{i + 2}")
+            .Tap(s => tappedStrings.Add($"tap: {s}"))
+            .Action(async value => 
+            {
+                await Task.Delay(1);
+                outputs.Add(value);
+            })
+            .Build();
+
+        // act
+        pipeline.Post(1);
+        pipeline.Post(2);
+        pipeline.Post(3);
+        pipeline.Complete();
+        await pipeline.Completion;
+
+        // assert
+        Assert.That(tappedInts, Is.EqualTo([2, 3, 4]).AsCollection);
+        Assert.That(tappedStrings, Is.EqualTo(["tap: 3", "tap: 4", "tap: 5"]).AsCollection);
+        Assert.That(outputs, Is.EqualTo(["3", "4", "5"]).AsCollection);
     }
 
     private static IEnumerable<TestCaseData> DataPipelineShouldFlowTestCases()
