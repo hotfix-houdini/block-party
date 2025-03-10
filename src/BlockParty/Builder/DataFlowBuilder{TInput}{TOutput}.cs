@@ -228,6 +228,28 @@ public class DataflowBuilder<TInput, TOutput>
         return new DataflowBuilder<TInput, TReplicatedPipelineOutput>(_sourceBlock, recombinedBlock, newDag);
     }
 
+    public DataflowBuilder<TInput, TOutput> Tap(Action<TOutput> lambda)
+    {
+        var newBlock = new TransformBlock<TOutput, TOutput>(input =>
+        {
+            lambda(input);
+            return input;
+        });
+        var newDag = AddBlock(newBlock);
+        return new DataflowBuilder<TInput, TOutput>(_sourceBlock, newBlock, newDag);
+    }
+
+    public DataflowBuilder<TInput, TOutput> Tap(Func<TOutput, Task> lambda)
+    {
+        var newBlock = new TransformBlock<TOutput, TOutput>(async input =>
+        {
+            await lambda(input);
+            return input;
+        });
+        var newDag = AddBlock(newBlock);
+        return new DataflowBuilder<TInput, TOutput>(_sourceBlock, newBlock, newDag);
+    }
+
     public IPropagatorBlock<TInput, TOutput> Build()
     {
         if (typeof(TOutput) == typeof(DoneResult))

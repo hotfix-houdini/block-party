@@ -1,3 +1,3 @@
 ### Release Notes
 
-- **Fixed** - Fault propagation on various blocks.
+- **Added** - `Tap(..)` method to the `Builder` to apply `f(x)` to a stream, while forwarding `x` downstream.
