@@ -17,39 +17,32 @@ public class BatchByBlock<TItem, UGroup> : IPropagatorBlock<TItem, TItem[]>, IRe
     // make note that the batchBy is a CONTIGUOUS operation
     public BatchByBlock(Func<TItem, UGroup> selector)
     {
-        var initialized = false;
-        var currentGroup = default(UGroup);
-        var itemsInCurrentGroup = new List<TItem>();
+        var groups = new Dictionary<UGroup, List<TItem>>();
 
         var source = new BufferBlock<TItem[]>();
         var target = new ActionBlock<TItem>(item =>
         {
-            var group = selector(item);
-            
-            if (initialized)
+            var groupKey = selector(item);
+
+            var groupAlreadyExists = groups.TryGetValue(groupKey, out var existingGroup);
+            if (!groupAlreadyExists)
             {
-                if (group.Equals(currentGroup))
+                var previousGroup = groups.Values.SingleOrDefault();
+                if (previousGroup is not null)
                 {
-                    itemsInCurrentGroup.Add(item);
-                }
-                else
-                {
-                    var posted = source.Post(itemsInCurrentGroup.ToArray());
+                    var posted = source.Post(previousGroup.ToArray());
                     if (!posted)
                     {
                         throw new FailedToPostException();
                     }
-
-                    currentGroup = group;
-                    itemsInCurrentGroup.Clear();
-                    itemsInCurrentGroup.Add(item);
+                    groups.Clear();
                 }
+
+                groups[groupKey] = [item];
             }
             else
             {
-                currentGroup = group;
-                itemsInCurrentGroup.Add(item);
-                initialized = true;
+                existingGroup.Add(item);
             }
         });
 
@@ -65,9 +58,9 @@ public class BatchByBlock<TItem, UGroup> : IPropagatorBlock<TItem, TItem[]>, IRe
             }
             else
             {
-                if (initialized && itemsInCurrentGroup.Any())
+                if (groups.Any())
                 {
-                    var posted = source.Post(itemsInCurrentGroup.ToArray());
+                    var posted = source.Post(groups.Values.Single().ToArray());
                     if (!posted)
                     {
                         ((IDataflowBlock)source).Fault(new FailedToPostException());
