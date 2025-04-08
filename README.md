@@ -8,12 +8,14 @@ There is a strong emphasis on in-order processing and completion propagation.
 
 Functionality provided: 
 - **AggregatorBlock** - is similar to a TransformBlock, but wraps any block and gives you access to the original input and the inner output.
+- **BatchByBlock** - is similar to `BatchBlock` and LINQ's `GroupBy` for arbitrary key batching instead of just batching by a # of items.
 - **BeamBlock** - is inspired by Apache Beam, and lets you group a stream into finite time windows, and output an aggregate of each window.
 - **FilterBlock** - is a simple "where" statement.
 - **SequencePreservingBlock** - is used to maintain and re-order contiguous streams. Useful when a message broker might not guarantee message order.
 - **ThrottleBlock** - is used to guard downstream blocks with a wall-clock throttle.
 - **DataflowBuilder** - is used to construct chains of blocks.
     - Compiles down into a single IPropagatorBlock via `DataflowBlock.Encapsulate`
+    - Exposes methods that add various blocks to the pipeline, including many dotnet-provided blocks and blocks from this repo.
     - Exposes a **Kafka** method, inspired by Apache Kafka, which provides in-order parallelism and pub-sub semantics.
     - Exposes a **Tap** method, which is used to apply `f(x)` to a stream, while forwarding `x` downstream.
     - Exposes **Mermaid Graph Generation** so you can see the underlying blocks generated and better understand/debug a pipeline. 
@@ -76,6 +78,54 @@ public async Task ShouldAggregateInputAndOutputToFinalValue()
     Assert.That(aggregatedValues[2], Is.EqualTo((4, "3")));
 }
 ```
+
+
+### BatchByBlock
+A combination of a BatchBlock and LINQ's GroupBy.
+
+Conceptual Example:
+```txt
+Input Stream: [1, 2, 3]
+
+BatchBy Block on Input Stream:
+    - select lambda: (i) => i / 2
+
+Output Stream:
+[
+    [1],   // held when first received but emited when `2` was received as it has a different groupKey.
+    [2, 3] // held until on complete is called
+]
+```
+
+Code Example:
+```csharp
+[Test]
+public async Task ShouldHoldOntoMessagesInSameGroupUntilNextGroup()
+{
+    // arrange
+    var batchByBlock = new BatchByBlock<int, int>(selector: i => i / 2);
+    var batches = new List<int[]>();
+    var gatherBlock = new ActionBlock<int[]>(batch => batches.Add(batch));
+
+    batchByBlock.LinkTo(gatherBlock, new DataflowLinkOptions(){  PropagateCompletion = true });
+
+    // act
+    batchByBlock.Post(1);
+    batchByBlock.Post(2);
+    batchByBlock.Post(3);
+    batchByBlock.Complete();
+    await gatherBlock.Completion;
+
+    // assert
+    int[][] expectedBatches =
+    [
+        [1],
+        [2, 3]
+    ];
+    Assert.That(batches, Is.EqualTo(expectedBatches).AsCollection);
+}
+```
+
 
 ### BeamBlock
 Inspired by Apache Beam, BeamBlock lets you group an incoming stream into time windows, and then aggregate each item within a window into an arbitrary accumulator. Downstream blocks will receive these windowed accumulators.
@@ -626,7 +676,8 @@ var unbuiltPipeline = new DataflowBuilder<int>()
         singlePartitionSelector: batch => batch.Count(),
         partitions: [0, 1, 2],
         (key, builder) => builder.Transform(batch => batch.Count()))
-    .Action(batchCounts => sum += batchCounts)
+    .BatchBy(batchCounts => batchCounts / 3)
+    .Action(batchedBatchCounts => sum += batchedBatchCounts.Sum())
     .Action(async batchDone => await Task.Delay(1));
 
 var mermaidGraph = unbuiltPipeline.GenerateMermaidGraph();
@@ -648,8 +699,9 @@ graph TD
   transform_11["TransformBlock&lt;TestAccumulator[],Int32&gt;"]
   transform_13["TransformBlock&lt;TestAccumulator[],Int32&gt;"]
   buffer_14["BufferBlock&lt;Int32&gt;"]
-  transform_15["TransformBlock&lt;Int32,DoneResult&gt;"]
-  transform_16["TransformBlock&lt;DoneResult,DoneResult&gt;"]
+  batchBy_15["BatchByBlock&lt;Int32,Int32&gt;"]
+  transform_16["TransformBlock&lt;Int32[],DoneResult&gt;"]
+  transform_17["TransformBlock&lt;DoneResult,DoneResult&gt;"]
 
   buffer_0 --> transform_1
   transform_1 --> transformMany_2
@@ -667,8 +719,9 @@ graph TD
   transform_9 --> buffer_14
   transform_11 --> buffer_14
   transform_13 --> buffer_14
-  buffer_14 --> transform_15
-  transform_15 --> transform_16
+  buffer_14 --> batchBy_15
+  batchBy_15 --> transform_16
+  transform_16 --> transform_17
 ```
 
 ### Tap(..) method
