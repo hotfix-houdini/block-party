@@ -6,7 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
 
-namespace BlockParty.Blocks.GroupBy;
+namespace BlockParty.Blocks.BatchBy;
 
 public class BatchByBlock<TItem, UGroup> : IPropagatorBlock<TItem, TItem[]>, IReceivableSourceBlock<TItem[]>
     where UGroup : IEquatable<UGroup>

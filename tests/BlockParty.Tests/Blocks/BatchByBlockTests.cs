@@ -1,4 +1,4 @@
-﻿using BlockParty.Blocks.GroupBy;
+﻿using BlockParty.Blocks.BatchBy;
 using System.Threading.Tasks.Dataflow;
 
 namespace BlockParty.Tests.Blocks;
