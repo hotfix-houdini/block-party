@@ -8,13 +8,36 @@ using System.Threading.Tasks.Dataflow;
 
 namespace BlockParty.Blocks.BatchBy;
 
+/// <summary>
+/// BatchByBlock is similar to the BatchBlock where TIn gets converted into TIn[] as the output. But, instead of just batching by a number of items, we batch by an arbitrary groupKey via a lambda. 
+/// This is similar to a GroupBy in LINQ, but it does not run the GroupBy on the entire datafow. Instead, it only groups contiguous items. When a different group is received, the previous batch is emitted. <br/><br/>
+/// 
+/// For example, this block could let you group contiguous items into a larger array by a common id.
+/// Or you can group items into arbitrary time windows. <br/><br/>
+/// 
+/// The `selector` parameter is the lambda you use to map an item to it's group. It must implement `IEquatable` of itself.<br/><br/>
+/// 
+/// This block (and nearly all in this repo) only supports in-order non-parallel processing.<br/>
+/// See <a href="https://github.com/hotfix-houdini/block-party">GitHub</a> for more details.
+/// </summary>
 public class BatchByBlock<TItem, UGroup> : IPropagatorBlock<TItem, TItem[]>, IReceivableSourceBlock<TItem[]>
     where UGroup : IEquatable<UGroup>
 {
     private readonly ITargetBlock<TItem> m_target;
     private readonly IReceivableSourceBlock<TItem[]> m_source;
 
-    // make note that the batchBy is a CONTIGUOUS operation
+    /// <summary>
+    /// BatchByBlock is similar to the BatchBlock where TIn gets converted into TIn[] as the output. But, instead of just batching by a number of items, we batch by an arbitrary groupKey via a lambda. 
+    /// This is similar to a GroupBy in LINQ, but it does not run the GroupBy on the entire datafow. Instead, it only groups contiguous items. When a different group is received, the previous batch is emitted. <br/><br/>
+    /// 
+    /// For example, this block could let you group contiguous items into a larger array by a common id.
+    /// Or you can group items into arbitrary time windows. <br/><br/>
+    /// 
+    /// The `selector` parameter is the lambda you use to map an item to it's group. It must implement `IEquatable` of itself.<br/><br/>
+    /// 
+    /// This block (and nearly all in this repo) only supports in-order non-parallel processing.<br/>
+    /// See <a href="https://github.com/hotfix-houdini/block-party">GitHub</a> for more details.
+    /// </summary>
     public BatchByBlock(Func<TItem, UGroup> selector)
     {
         var groups = new Dictionary<UGroup, List<TItem>>();
