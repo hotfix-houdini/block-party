@@ -200,7 +200,8 @@ public class DataflowBuilderTests
                 singlePartitionSelector: batch => batch.Count(),
                 partitions: [0, 1, 2],
                 (key, builder) => builder.Transform(batch => batch.Count()))
-            .Action(batchCounts => sum += batchCounts)
+            .BatchBy(batchCounts => batchCounts / 3)
+            .Action(batchedBatchCounts => sum += batchedBatchCounts.Sum())
             .Action(async batchDone => await Task.Delay(1));
 
         // act
@@ -224,8 +225,9 @@ graph TD
   transform_11[""TransformBlock&lt;TestAccumulator[],Int32&gt;""]
   transform_13[""TransformBlock&lt;TestAccumulator[],Int32&gt;""]
   buffer_14[""BufferBlock&lt;Int32&gt;""]
-  transform_15[""TransformBlock&lt;Int32,DoneResult&gt;""]
-  transform_16[""TransformBlock&lt;DoneResult,DoneResult&gt;""]
+  batchBy_15[""BatchByBlock&lt;Int32,Int32&gt;""]
+  transform_16[""TransformBlock&lt;Int32[],DoneResult&gt;""]
+  transform_17[""TransformBlock&lt;DoneResult,DoneResult&gt;""]
 
   buffer_0 --> transform_1
   transform_1 --> transformMany_2
@@ -243,8 +245,9 @@ graph TD
   transform_9 --> buffer_14
   transform_11 --> buffer_14
   transform_13 --> buffer_14
-  buffer_14 --> transform_15
-  transform_15 --> transform_16
+  buffer_14 --> batchBy_15
+  batchBy_15 --> transform_16
+  transform_16 --> transform_17
 ```
 "));
     }
@@ -692,6 +695,14 @@ graph TD
                 "numbers: abc 123" // message got duplicated to both letters and numbers partitions
                 )
         ).SetName("kafka should support message duplication to multiple partitions");
+
+        yield return new TestCaseData(
+            Array(0, 1, 2, 3, 4),
+            new DataflowBuilder<int>()
+                .BatchBy(i => i / 3)
+                .Build(),
+            Array<int[]>([0, 1, 2], [3, 4])
+        ).SetName("batchBy should group contiguous groups");
     }
 
     private static T[] Array<T>(params T[] elements) => elements;

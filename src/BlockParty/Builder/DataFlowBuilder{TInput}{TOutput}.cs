@@ -1,4 +1,5 @@
-﻿using BlockParty.Blocks.Beam;
+﻿using BlockParty.Blocks.BatchBy;
+using BlockParty.Blocks.Beam;
 using BlockParty.Blocks.Filter;
 using BlockParty.Builder.DAG;
 using System;
@@ -248,6 +249,14 @@ public class DataflowBuilder<TInput, TOutput>
         });
         var newDag = AddBlock(newBlock);
         return new DataflowBuilder<TInput, TOutput>(_sourceBlock, newBlock, newDag);
+    }
+
+    public DataflowBuilder<TInput, TOutput[]> BatchBy<UGroup>(Func<TOutput, UGroup> selector)
+        where UGroup : IEquatable<UGroup>
+    {
+        var newBlock = new BatchByBlock<TOutput, UGroup>(selector);
+        var newDag = AddBlock(newBlock);
+        return new DataflowBuilder<TInput, TOutput[]>(_sourceBlock, newBlock, newDag);
     }
 
     public IPropagatorBlock<TInput, TOutput> Build()
