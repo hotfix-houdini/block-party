@@ -692,6 +692,14 @@ graph TD
                 "numbers: abc 123" // message got duplicated to both letters and numbers partitions
                 )
         ).SetName("kafka should support message duplication to multiple partitions");
+
+        yield return new TestCaseData(
+            Array(0, 1, 2, 3, 4),
+            new DataflowBuilder<int>()
+                .BatchBy(i => i / 3)
+                .Build(),
+            Array<int[]>([0, 1, 2], [3, 4])
+        ).SetName("batchBy should group contiguous groups");
     }
 
     private static T[] Array<T>(params T[] elements) => elements;
