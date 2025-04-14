@@ -648,23 +648,23 @@ graph TD
             Array(4, 5, 6),
             new DataflowBuilder<int>()
                 .Kafka(
-                    singlePartitionSelector: i => i % 3,                                    
-                    partitions: [1, 2],                                                     
-                    replicatedPipeline: (key, builder) => builder                           
+                    singlePartitionSelector: i => i % 3,
+                    partitions: [1, 2],
+                    replicatedPipeline: (key, builder) => builder
                         .TransformMany(i => Enumerable.Range(0, i).Select(j => $"{i}")))
                         .Kafka(
                             singlePartitionSelector: i => int.Parse(i) % 2,
                             partitions: [1],
                             (innerKey, innerBuilder) => innerBuilder.Transform(s => $"[{innerKey}]: {s}"))
-                .Batch(9)                                                                   
-                .TransformMany(combinedResults => combinedResults.OrderBy(s => s))          
+                .Batch(9)
+                .TransformMany(combinedResults => combinedResults.OrderBy(s => s))
                 .Build(),
             Array("[1]: 5", "[1]: 5", "[1]: 5", "[1]: 5", "[1]: 5")
         ).SetName("kafka in kafka should work");
 
         yield return new TestCaseData(
             Array("abc", "123", "abc 123"),
-            new DataflowBuilder<string>()   
+            new DataflowBuilder<string>()
                 .Kafka(
                     partitions: ["numbers", "letters"],
                     multiPartitionSelector: s =>
@@ -686,7 +686,7 @@ graph TD
                     replicatedPipeline: (key, builder) => builder
                         .Transform(s => $"{key}: {s}"))
                 .Batch(5000)
-                .TransformMany(combinedResults => combinedResults.OrderBy(s => s))          
+                .TransformMany(combinedResults => combinedResults.OrderBy(s => s))
                 .Build(),
             Array(
                 "letters: abc",
@@ -703,6 +703,22 @@ graph TD
                 .Build(),
             Array<int[]>([0, 1, 2], [3, 4])
         ).SetName("batchBy should group contiguous groups");
+
+        yield return new TestCaseData(
+            Array(0, 1, 2, 3, 4),
+            new DataflowBuilder<int>()
+                .Transform(async i => await Task.FromResult(42))
+                .Build(),
+            Array([42, 42, 42, 42, 42])
+        ).SetName("transform should support async/await");
+
+        yield return new TestCaseData(
+            Array(0, 1, 2, 3, 4),
+            new DataflowBuilder<int>()
+                .TransformMany(async i => await Task.FromResult((IEnumerable<int>)[42, 43]))
+                .Build(),
+            Array([42, 43, 42, 43, 42, 43, 42, 43, 42, 43])
+        ).SetName("transformMany should support async/await");
     }
 
     private static T[] Array<T>(params T[] elements) => elements;

@@ -44,7 +44,21 @@ public class DataflowBuilder<TInput, TOutput>
         return new DataflowBuilder<TInput, TNewType>(_sourceBlock, newBlock, newDag);
     }
 
+    public DataflowBuilder<TInput, TNewType> Transform<TNewType>(Func<TOutput, Task<TNewType>> lambda)
+    {
+        var newBlock = new TransformBlock<TOutput, TNewType>(lambda);
+        var newDag = AddBlock(newBlock);
+        return new DataflowBuilder<TInput, TNewType>(_sourceBlock, newBlock, newDag);
+    }
+
     public DataflowBuilder<TInput, TNewType> TransformMany<TNewType>(Func<TOutput, IEnumerable<TNewType>> lambda)
+    {
+        var newBlock = new TransformManyBlock<TOutput, TNewType>(lambda);
+        var newDag = AddBlock(newBlock);
+        return new DataflowBuilder<TInput, TNewType>(_sourceBlock, newBlock, newDag);
+    }
+
+    public DataflowBuilder<TInput, TNewType> TransformMany<TNewType>(Func<TOutput, Task<IEnumerable<TNewType>>> lambda)
     {
         var newBlock = new TransformManyBlock<TOutput, TNewType>(lambda);
         var newDag = AddBlock(newBlock);
