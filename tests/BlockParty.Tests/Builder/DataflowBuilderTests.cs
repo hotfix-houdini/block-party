@@ -1,5 +1,6 @@
 ﻿using BlockParty.Builder;
 using BlockParty.Tests.Blocks;
+using System.Diagnostics;
 using System.Threading.Tasks.Dataflow;
 
 namespace BlockParty.Tests.Builder;
@@ -452,6 +453,38 @@ graph TD
         Assert.That(outputs, Is.EqualTo(["3", "4", "5"]).AsCollection);
     }
 
+    [Test]
+    public async Task ShouldBeAbleToConstructAnOrderedParallelPipeline()
+    {
+        // arrange
+        var numbers = new List<int>();
+        var pipeline = new DataflowBuilder<int>()
+            .TransformMany(async i =>
+            {
+                if (i % 3 == 0) return []; // testing a filter while preserving paralleled-order
+                await Task.Delay(100);
+                return (IEnumerable<int>)[i];
+            }, new ExecutionDataflowBlockOptions() { MaxDegreeOfParallelism = 3, EnsureOrdered = true })
+            .Action(i => numbers.Add(i))
+            .Build();
+
+        // act
+        var stopwatch = new Stopwatch();
+        stopwatch.Start();
+        for(int i = 0; i < 15; i++)
+        {
+            pipeline.Post(i);
+        }
+        pipeline.Complete();
+        await pipeline.Completion;
+        stopwatch.Stop();
+
+        // assert
+        Assert.That(numbers, Has.Count.EqualTo(10));
+        Assert.That(numbers, Is.EqualTo([1, 2, 4, 5, 7, 8, 10, 11, 13, 14]).AsCollection);
+        Assert.That(stopwatch.Elapsed.TotalMilliseconds, Is.LessThanOrEqualTo(500)); // if ran synchronously, should be at least 1 second
+    }
+
     private static IEnumerable<TestCaseData> DataPipelineShouldFlowTestCases()
     {
         yield return new TestCaseData(
@@ -719,6 +752,26 @@ graph TD
                 .Build(),
             Array([42, 43, 42, 43, 42, 43, 42, 43, 42, 43])
         ).SetName("transformMany should support async/await");
+
+        yield return new TestCaseData(
+            Array(0, 1, 2, 3, 4),
+            new DataflowBuilder<int>()
+                .Transform(i => i + 1, new ExecutionDataflowBlockOptions() { MaxDegreeOfParallelism = 3, EnsureOrdered = true }) // 1 .. 5
+                .Transform(async i => await Task.FromResult(42), new ExecutionDataflowBlockOptions() { EnsureOrdered = true }) // 42 .. 42 
+                .TransformMany(i => new int[] { i, i + 1, i + 2, i + 3 }, new ExecutionDataflowBlockOptions() { MaxDegreeOfParallelism = 3, EnsureOrdered = true })
+                .TransformMany(async i =>
+                {
+                    await Task.Delay(i);
+                    return (IEnumerable<int>) [i, i + 1];
+                }, new ExecutionDataflowBlockOptions() { MaxDegreeOfParallelism = 10, EnsureOrdered = true })
+                .Tap(i => Console.WriteLine(i), new ExecutionDataflowBlockOptions() { MaxDegreeOfParallelism = 2, EnsureOrdered = true })
+                .Tap(async i => await Task.FromResult(() => Console.WriteLine(i)), new ExecutionDataflowBlockOptions() { MaxDegreeOfParallelism = 2, EnsureOrdered = false })
+                .Batch(8, new GroupingDataflowBlockOptions() { EnsureOrdered = true })
+                .Action(group => { }, new ExecutionDataflowBlockOptions() { MaxDegreeOfParallelism = 3 })
+                .Action(async group => await Task.FromResult(() => { }), new ExecutionDataflowBlockOptions() { MaxDegreeOfParallelism = 3 })
+                .Build(),
+            Array(new DoneResult[] { })
+        ).SetName("block options should .... compile");
     }
 
     private static T[] Array<T>(params T[] elements) => elements;

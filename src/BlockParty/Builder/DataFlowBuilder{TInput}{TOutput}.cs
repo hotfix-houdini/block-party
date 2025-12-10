@@ -43,10 +43,22 @@ public class DataflowBuilder<TInput, TOutput>
         var newDag = AddBlock(newBlock);
         return new DataflowBuilder<TInput, TNewType>(_sourceBlock, newBlock, newDag);
     }
+    public DataflowBuilder<TInput, TNewType> Transform<TNewType>(Func<TOutput, TNewType> lambda, ExecutionDataflowBlockOptions blockOptions)
+    {
+        var newBlock = new TransformBlock<TOutput, TNewType>(lambda, blockOptions);
+        var newDag = AddBlock(newBlock);
+        return new DataflowBuilder<TInput, TNewType>(_sourceBlock, newBlock, newDag);
+    }
 
     public DataflowBuilder<TInput, TNewType> Transform<TNewType>(Func<TOutput, Task<TNewType>> lambda)
     {
         var newBlock = new TransformBlock<TOutput, TNewType>(lambda);
+        var newDag = AddBlock(newBlock);
+        return new DataflowBuilder<TInput, TNewType>(_sourceBlock, newBlock, newDag);
+    }
+    public DataflowBuilder<TInput, TNewType> Transform<TNewType>(Func<TOutput, Task<TNewType>> lambda, ExecutionDataflowBlockOptions blockOptions)
+    {
+        var newBlock = new TransformBlock<TOutput, TNewType>(lambda, blockOptions);
         var newDag = AddBlock(newBlock);
         return new DataflowBuilder<TInput, TNewType>(_sourceBlock, newBlock, newDag);
     }
@@ -57,10 +69,22 @@ public class DataflowBuilder<TInput, TOutput>
         var newDag = AddBlock(newBlock);
         return new DataflowBuilder<TInput, TNewType>(_sourceBlock, newBlock, newDag);
     }
+    public DataflowBuilder<TInput, TNewType> TransformMany<TNewType>(Func<TOutput, IEnumerable<TNewType>> lambda, ExecutionDataflowBlockOptions blockOptions)
+    {
+        var newBlock = new TransformManyBlock<TOutput, TNewType>(lambda, blockOptions);
+        var newDag = AddBlock(newBlock);
+        return new DataflowBuilder<TInput, TNewType>(_sourceBlock, newBlock, newDag);
+    }
 
     public DataflowBuilder<TInput, TNewType> TransformMany<TNewType>(Func<TOutput, Task<IEnumerable<TNewType>>> lambda)
     {
         var newBlock = new TransformManyBlock<TOutput, TNewType>(lambda);
+        var newDag = AddBlock(newBlock);
+        return new DataflowBuilder<TInput, TNewType>(_sourceBlock, newBlock, newDag);
+    }
+    public DataflowBuilder<TInput, TNewType> TransformMany<TNewType>(Func<TOutput, Task<IEnumerable<TNewType>>> lambda, ExecutionDataflowBlockOptions blockOptions)
+    {
+        var newBlock = new TransformManyBlock<TOutput, TNewType>(lambda, blockOptions);
         var newDag = AddBlock(newBlock);
         return new DataflowBuilder<TInput, TNewType>(_sourceBlock, newBlock, newDag);
     }
@@ -88,6 +112,22 @@ public class DataflowBuilder<TInput, TOutput>
         var newDag = AddBlock(newBlock);
         return new DataflowBuilder<TInput, DoneResult>(_sourceBlock, newBlock, newDag);
     }
+    /// <summary>
+    /// Note: This actually creates a TransformBlock instead of an Action block, where the output is a "DoneResult" object.
+    /// The intention is not to link downstream of this; it was done this way to maintain the IPropagator interface.
+    /// Additionally, if the last block in the pipeline outputs to DoneResult, then it will automatically be linked to the NullTarget block so it will process messages and complete automatically.
+    /// If for SOME reason you build a pipeline and end it with Action, AND want to link downstream of it (just receiving DoneResults), then you want to link to with the PREPEND instead of APPEND option.
+    /// </summary>
+    public DataflowBuilder<TInput, DoneResult> Action(Action<TOutput> lambda, ExecutionDataflowBlockOptions blockOptions)
+    {
+        var newBlock = new TransformBlock<TOutput, DoneResult>(input =>
+        {
+            lambda(input);
+            return DoneResult.Instance;
+        }, blockOptions);
+        var newDag = AddBlock(newBlock);
+        return new DataflowBuilder<TInput, DoneResult>(_sourceBlock, newBlock, newDag);
+    }
 
     /// <summary>
     /// Note: This actually creates a TransformBlock instead of an Action block, where the output is a "DoneResult" object.
@@ -102,6 +142,22 @@ public class DataflowBuilder<TInput, TOutput>
             await lambda(input);
             return DoneResult.Instance;
         });
+        var newDag = AddBlock(newBlock);
+        return new DataflowBuilder<TInput, DoneResult>(_sourceBlock, newBlock, newDag);
+    }
+    /// <summary>
+    /// Note: This actually creates a TransformBlock instead of an Action block, where the output is a "DoneResult" object.
+    /// The intention is not to link downstream of this; it was done this way to maintain the IPropagator interface.
+    /// Additionally, if the last block in the pipeline outputs to DoneResult, then it will automatically be linked to the NullTarget block so it will process messages and complete automatically.
+    /// If for SOME reason you build a pipeline and end it with Action, AND want to link downstream of it (just receiving DoneResults), then you want to link to with the PREPEND instead of APPEND option.
+    /// </summary>
+    public DataflowBuilder<TInput, DoneResult> Action(Func<TOutput, Task> lambda, ExecutionDataflowBlockOptions blockOptions)
+    {
+        var newBlock = new TransformBlock<TOutput, DoneResult>(async input =>
+        {
+            await lambda(input);
+            return DoneResult.Instance;
+        }, blockOptions);
         var newDag = AddBlock(newBlock);
         return new DataflowBuilder<TInput, DoneResult>(_sourceBlock, newBlock, newDag);
     }
@@ -120,6 +176,12 @@ public class DataflowBuilder<TInput, TOutput>
     public DataflowBuilder<TInput, TOutput[]> Batch(int batchSize)
     {
         var newBlock = new BatchBlock<TOutput>(batchSize);
+        var newDag = AddBlock(newBlock);
+        return new DataflowBuilder<TInput, TOutput[]>(_sourceBlock, newBlock, newDag);
+    }
+    public DataflowBuilder<TInput, TOutput[]> Batch(int batchSize, GroupingDataflowBlockOptions blockOptions)
+    {
+        var newBlock = new BatchBlock<TOutput>(batchSize, blockOptions);
         var newDag = AddBlock(newBlock);
         return new DataflowBuilder<TInput, TOutput[]>(_sourceBlock, newBlock, newDag);
     }
@@ -253,6 +315,16 @@ public class DataflowBuilder<TInput, TOutput>
         var newDag = AddBlock(newBlock);
         return new DataflowBuilder<TInput, TOutput>(_sourceBlock, newBlock, newDag);
     }
+    public DataflowBuilder<TInput, TOutput> Tap(Action<TOutput> lambda, ExecutionDataflowBlockOptions blockOptions)
+    {
+        var newBlock = new TransformBlock<TOutput, TOutput>(input =>
+        {
+            lambda(input);
+            return input;
+        }, blockOptions);
+        var newDag = AddBlock(newBlock);
+        return new DataflowBuilder<TInput, TOutput>(_sourceBlock, newBlock, newDag);
+    }
 
     public DataflowBuilder<TInput, TOutput> Tap(Func<TOutput, Task> lambda)
     {
@@ -261,6 +333,16 @@ public class DataflowBuilder<TInput, TOutput>
             await lambda(input);
             return input;
         });
+        var newDag = AddBlock(newBlock);
+        return new DataflowBuilder<TInput, TOutput>(_sourceBlock, newBlock, newDag);
+    }
+    public DataflowBuilder<TInput, TOutput> Tap(Func<TOutput, Task> lambda, ExecutionDataflowBlockOptions blockOptions)
+    {
+        var newBlock = new TransformBlock<TOutput, TOutput>(async input =>
+        {
+            await lambda(input);
+            return input;
+        }, blockOptions);
         var newDag = AddBlock(newBlock);
         return new DataflowBuilder<TInput, TOutput>(_sourceBlock, newBlock, newDag);
     }

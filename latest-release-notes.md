@@ -1,3 +1,3 @@
 ### Release Notes
 
-- **Added** - `async` overloads to `Transform` and `TransformMany` on builder.
+- **Added** - `BlockOptions` overloads to various builder methods to primarily supported parallel-but-ordered pipelines.
