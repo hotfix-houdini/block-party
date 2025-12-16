@@ -1,3 +1,4 @@
 ### Release Notes
 
-- **Added** - `BlockOptions` overloads to various builder methods to primarily supported parallel-but-ordered pipelines.
+- **Added** - `ChunkBlock`, similar to LINQ's `Chunk` method.
+- **Added** - `Chunk()` to the blockBuilder.

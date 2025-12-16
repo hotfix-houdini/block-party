@@ -772,6 +772,14 @@ graph TD
                 .Build(),
             Array(new DoneResult[] { })
         ).SetName("block options should .... compile");
+
+        yield return new TestCaseData(
+            Array(0, 1, 2, 3, 4),
+            new DataflowBuilder<int>()
+                .Chunk(threshold: 4, selector: i => (ulong)i)
+                .Build(),
+            Array<int[]>([0, 1, 2], [3], [4])
+        ).SetName("chunk should group by a threshold");
     }
 
     private static T[] Array<T>(params T[] elements) => elements;

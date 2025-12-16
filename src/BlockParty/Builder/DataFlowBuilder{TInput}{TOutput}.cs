@@ -1,5 +1,6 @@
 ﻿using BlockParty.Blocks.BatchBy;
 using BlockParty.Blocks.Beam;
+using BlockParty.Blocks.ChunkBlock;
 using BlockParty.Blocks.Filter;
 using BlockParty.Builder.DAG;
 using System;
@@ -351,6 +352,13 @@ public class DataflowBuilder<TInput, TOutput>
         where UGroup : IEquatable<UGroup>
     {
         var newBlock = new BatchByBlock<TOutput, UGroup>(selector);
+        var newDag = AddBlock(newBlock);
+        return new DataflowBuilder<TInput, TOutput[]>(_sourceBlock, newBlock, newDag);
+    }
+
+    public DataflowBuilder<TInput, TOutput[]> Chunk(ulong threshold, Func<TOutput, ulong> selector)
+    {
+        var newBlock = new ChunkBlock<TOutput>(threshold, selector);
         var newDag = AddBlock(newBlock);
         return new DataflowBuilder<TInput, TOutput[]>(_sourceBlock, newBlock, newDag);
     }
