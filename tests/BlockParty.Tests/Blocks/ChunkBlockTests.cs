@@ -2,7 +2,8 @@
 using System.Threading.Tasks.Dataflow;
 
 namespace BlockParty.Tests.Blocks;
-internal class ChunkBlockTests
+
+public class ChunkBlockTests
 {
     [Test]
     public async Task ShouldHoldOntoMessagesUntilThresholdCrossed()
