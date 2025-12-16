@@ -10,6 +10,7 @@ Functionality provided:
 - **AggregatorBlock** - is similar to a TransformBlock, but wraps any block and gives you access to the original input and the inner output.
 - **BatchByBlock** - is similar to `BatchBlock` and LINQ's `GroupBy` for arbitrary key batching instead of just batching by a # of items.
 - **BeamBlock** - is inspired by Apache Beam, and lets you group a stream into finite time windows, and output an aggregate of each window.
+- **ChunkBlock** - is similar to `BatchBlock` and LINQ's `Chunk` obtaining groups of items that have some aggregate strictly less than a threshold.
 - **FilterBlock** - is a simple "where" statement.
 - **SequencePreservingBlock** - is used to maintain and re-order contiguous streams. Useful when a message broker might not guarantee message order.
 - **ThrottleBlock** - is used to guard downstream blocks with a wall-clock throttle.
@@ -233,6 +234,55 @@ Available Settings:
         // item 3 not emitted; didn't receive an item >= 4pm.
     ]
   ```
+
+### ChunkBlock
+A combination of a BatchBlock and LINQ's Chunk.
+
+Conceptual Example:
+```txt
+Input Stream: [5, 4, 9, 10, 2, 3]
+
+Chunk Block on Input Stream:
+    - chunkThreshold: 10
+    - chunkSelector lambda: (i) => (ulong)i
+
+Output Stream:
+[
+    [5, 4] // held when first received but emited when `9` was received as the chunk sum exceed the threshold
+    [9],   
+    [10],
+    [2, 3] // held until completion is called
+]
+```
+
+Code Example:
+```csharp
+[Test]
+public async Task ShouldHoldOntoMessagesUntilThresholdCrossed()
+{
+    // arrange
+    var chunkBlock = new ChunkBlock<ulong>(10, i => i);
+    var chunks = new List<ulong[]>();
+    var gatherBlock = new ActionBlock<ulong[]>(batch => chunks.Add(batch));
+
+    chunkBlock.LinkTo(gatherBlock, new DataflowLinkOptions() { PropagateCompletion = true });
+
+    // act
+    chunkBlock.Post(5ul);
+    chunkBlock.Post(4ul);
+    chunkBlock.Post(2ul);
+    chunkBlock.Complete();
+    await gatherBlock.Completion;
+
+    // assert
+    ulong[][] expectedChunks =
+    [
+        [5, 4],
+        [2]
+    ];
+    Assert.That(chunks, Is.EqualTo(expectedChunks).AsCollection);
+}
+```
 
 ### FilterBlock
 FilterBlock can be inserted into a TPL Dataflow pipeline to gatekeep the stream by a lambda method. 
