@@ -485,6 +485,45 @@ graph TD
         Assert.That(stopwatch.Elapsed.TotalMilliseconds, Is.LessThanOrEqualTo(500)); // if ran synchronously, should be at least 1 second
     }
 
+    [Test]
+    public async Task ShouldBeAbleToAssignBlockPropertiesToFirstBlock()
+    {
+        // arrange
+        var numbers = new List<int>();
+        var addedNumbers = 0;
+        var twoMessagesPendingGate = new TaskCompletionSource();
+        var atlestOneMessageDrainedGate = new TaskCompletionSource();
+        var pipeline = new DataflowBuilder<int>(new DataflowBlockOptions() { BoundedCapacity = 2 })
+            .Action(async i => 
+            {
+                await twoMessagesPendingGate.Task;
+                numbers.Add(i);
+                addedNumbers++;
+
+                if (addedNumbers == 2)
+                {
+                    atlestOneMessageDrainedGate.SetResult();
+                }
+            }, new ExecutionDataflowBlockOptions() { BoundedCapacity = 2 })
+            .Build();
+
+        // act
+        pipeline.Post(1);
+        pipeline.Post(2);
+        var backPropagatedResponse = pipeline.Post(3);
+        Assert.That(backPropagatedResponse, Is.EqualTo(false)); // bounded!
+
+        twoMessagesPendingGate.SetResult();
+        await atlestOneMessageDrainedGate.Task;
+        var backPropagatedResponse2 = pipeline.Post(3);
+
+        pipeline.Complete();
+        await pipeline.Completion;
+
+        // assert
+        Assert.That(backPropagatedResponse2, Is.EqualTo(true));
+    }
+
     private static IEnumerable<TestCaseData> DataPipelineShouldFlowTestCases()
     {
         yield return new TestCaseData(
