@@ -11,7 +11,7 @@ namespace BlockParty.Builder;
 /// </summary>
 public class DataflowBuilder<TInput> : DataflowBuilder<TInput, TInput>
 {
-    public DataflowBuilder() : base(new BufferBlock<TInput>())
+    public DataflowBuilder(DataflowBlockOptions firstBlockOptions = null) : base(new BufferBlock<TInput>(firstBlockOptions ?? new()))
     {
         _lastBlock = _sourceBlock;
         _blockDag = _blockDag.Add(_sourceBlock);
